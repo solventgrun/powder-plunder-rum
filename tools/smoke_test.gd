@@ -15,10 +15,13 @@ func _run() -> void:
 	_test_content_validation(failures)
 	_test_sailing_model(failures)
 	await _test_main_scene_moves_ship(failures)
+	await _test_broadside_side_behavior(failures)
+	await _test_ammo_switch_cooldown(failures)
+	await _test_projectile_range_splash(failures)
 	await _test_cannon_hits_target(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: main scene loads, the little boat sails, and cannons damage the target.")
+		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -148,6 +151,134 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 	_free_scene(scene)
 
 
+func _test_broadside_side_behavior(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "broadside side behavior")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var broadside := _get_broadside(scene, failures)
+	if ship == null or broadside == null:
+		_free_scene(scene)
+		return
+
+	var starting_children := scene.get_child_count()
+	var port_fired: bool = broadside.call("fire_port")
+	await process_frame
+	var after_port_children := scene.get_child_count()
+	if not port_fired:
+		failures.append("Port broadside should fire when ready.")
+	if broadside.get("port_cooldown") <= 0.0:
+		failures.append("Port broadside should enter cooldown after firing.")
+	if broadside.get("starboard_cooldown") != 0.0:
+		failures.append("Port broadside should not put starboard broadside into cooldown.")
+	if after_port_children <= starting_children:
+		failures.append("Port broadside should spawn projectile or flash nodes.")
+
+	var starboard_fired: bool = broadside.call("fire_starboard")
+	await process_frame
+	if not starboard_fired:
+		failures.append("Starboard broadside should fire while port is cooling down.")
+	if broadside.get("starboard_cooldown") <= 0.0:
+		failures.append("Starboard broadside should enter cooldown after firing.")
+
+	_free_scene(scene)
+
+
+func _test_ammo_switch_cooldown(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "ammo switch cooldown")
+	if scene == null:
+		return
+
+	var broadside := _get_broadside(scene, failures)
+	if broadside == null:
+		_free_scene(scene)
+		return
+
+	broadside.call("select_ammo_by_index", 1)
+	if broadside.get("selected_ammo_id") != "chain":
+		failures.append("Selecting ammo index 1 should switch to chain shot.")
+	if broadside.get("port_cooldown") <= 0.0 or broadside.get("starboard_cooldown") <= 0.0:
+		failures.append("Changing ammo should put both broadsides into cooldown.")
+
+	_free_scene(scene)
+
+
+func _test_projectile_range_splash(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "projectile range splash")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var broadside := _get_broadside(scene, failures)
+	if ship == null or broadside == null:
+		_free_scene(scene)
+		return
+
+	var target := scene.get_node_or_null("TargetShip") as Node3D
+	if target:
+		target.global_position = Vector3(300.0, 0.0, 0.0)
+
+	var fired: bool = broadside.call("fire_starboard")
+	if not fired:
+		failures.append("Starboard broadside should fire for splash test.")
+		_free_scene(scene)
+		return
+
+	var saw_cannonball := false
+	var saw_splash := false
+	for index in range(260):
+		await physics_frame
+		saw_cannonball = saw_cannonball or _scene_has_child_named(scene, "Cannonball")
+		saw_splash = saw_splash or _scene_has_child_named(scene, "Splash")
+
+	if not saw_cannonball:
+		failures.append("Splash test never observed a cannonball.")
+	if _scene_has_child_named(scene, "Cannonball"):
+		failures.append("Cannonball should despawn after reaching max range.")
+	if not saw_splash:
+		failures.append("Cannonball should spawn a splash at max range.")
+
+	_free_scene(scene)
+
+
 func _free_scene(scene: Node) -> void:
 	root.remove_child(scene)
 	scene.free()
+
+
+func _instantiate_main_scene(failures: Array[String], test_name: String) -> Node:
+	var packed := load(MAIN_SCENE_PATH)
+	if packed == null:
+		failures.append("Could not load main scene for %s test." % test_name)
+		return null
+
+	var scene: Node = packed.instantiate()
+	if scene == null:
+		failures.append("Could not instantiate main scene for %s test." % test_name)
+		return null
+
+	root.add_child(scene)
+	await process_frame
+	await physics_frame
+	return scene
+
+
+func _get_broadside(scene: Node, failures: Array[String]) -> Node:
+	var ship := scene.get_node_or_null("PlayerShip")
+	if ship == null:
+		failures.append("Could not find PlayerShip for broadside test.")
+		return null
+
+	var broadside := ship.get_node_or_null("BroadsideController")
+	if broadside == null:
+		failures.append("Could not find BroadsideController for broadside test.")
+		return null
+	return broadside
+
+
+func _scene_has_child_named(scene: Node, child_name: String) -> bool:
+	for child in scene.get_children():
+		if child.name == child_name or child.name.begins_with("%s@" % child_name):
+			return true
+	return false
