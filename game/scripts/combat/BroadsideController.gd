@@ -95,6 +95,7 @@ func _fire_side(side: int) -> bool:
 	if parent_3d == null:
 		return false
 	var fired_any := false
+	var self_status_effects: Dictionary = {}
 
 	for index in range(cannonballs_per_broadside):
 		var projectile := projectile_scene.instantiate()
@@ -120,6 +121,10 @@ func _fire_side(side: int) -> bool:
 		fired_any = true
 
 	if fired_any:
+		self_status_effects = _roll_self_status_effects(ammo.get("status_effects"))
+		if not self_status_effects.is_empty() and parent_3d.has_method("apply_status_effects"):
+			parent_3d.call("apply_status_effects", self_status_effects)
+
 		var boom_player := get_node_or_null("CannonBoomPlayer")
 		if boom_player and boom_player.has_method("play_boom"):
 			boom_player.call("play_boom")
@@ -129,6 +134,23 @@ func _fire_side(side: int) -> bool:
 	else:
 		starboard_cooldown = reload_time
 	return fired_any
+
+
+func _roll_self_status_effects(status_effects: Dictionary) -> Dictionary:
+	if status_effects.is_empty():
+		return {}
+
+	var rolled := {}
+	for effect_id in status_effects.keys():
+		var effect: Dictionary = status_effects[effect_id]
+		var chance := float(effect.get("self_ignition_chance", 0.0))
+		if chance > 0.0 and randf() <= chance:
+			var self_effect := effect.duplicate(true)
+			self_effect.erase("chance")
+			self_effect.erase("self_ignition_chance")
+			self_effect["chance"] = 1.0
+			rolled[effect_id] = self_effect
+	return rolled
 
 
 func _spawn_muzzle_flash(spawn_parent: Node, position: Vector3) -> void:

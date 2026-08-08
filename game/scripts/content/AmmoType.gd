@@ -8,3 +8,4 @@ class_name AmmoType
 @export var sail_damage: float = 0.0
 @export var crew_damage: float = 0.0
 @export var morale_damage: float = 0.0
+@export var status_effects: Dictionary = {}

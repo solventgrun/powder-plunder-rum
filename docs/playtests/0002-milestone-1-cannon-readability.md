@@ -25,6 +25,8 @@ First playable feedback after adding primitive broadside firing, ammo selection,
 - Added a procedural placeholder cannon boom.
 - Added primitive splash markers when cannonballs reach max range.
 - Added primitive impact flashes on hits.
+- Added a minimal burning status effect for fire shot.
+- Added a chance for fire shot to ignite the firing ship.
 - Added a sunk/disabled target state when hull reaches zero.
 - Added visible reload bars.
 - Added a HUD target direction indicator.

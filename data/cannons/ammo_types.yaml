@@ -10,7 +10,7 @@ ammo_types:
 
   - id: chain
     name: Chain Shot
-    range_multiplier: 0.75
+    range_multiplier: 0.65
     damage:
       hull: 8
       sail: 14
@@ -19,7 +19,7 @@ ammo_types:
 
   - id: grape
     name: Grape Shot
-    range_multiplier: 0.55
+    range_multiplier: 0.35
     damage:
       hull: 4
       sail: 2
@@ -28,9 +28,15 @@ ammo_types:
 
   - id: fire
     name: Fire Shot
-    range_multiplier: 0.38
+    range_multiplier: 0.25
     damage:
       hull: 16
       sail: 8
       crew: 4
       morale: 12
+    status_effects:
+      burning:
+        chance: 1.0
+        self_ignition_chance: 0.15
+        duration: 5.0
+        hull_damage_per_second: 2.0

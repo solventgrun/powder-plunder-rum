@@ -12,6 +12,7 @@ var direction: Vector3 = Vector3.RIGHT
 var speed: float = 30.0
 var remaining_range: float = 30.0
 var damage: float = 4.0
+var status_effects: Dictionary = {}
 var source: Node
 
 
@@ -25,6 +26,7 @@ func configure(fire_direction: Vector3, cannon: Resource, ammo: Resource, projec
 	speed = float(cannon.get("projectile_speed"))
 	remaining_range = float(cannon.get("range")) * float(ammo.get("range_multiplier"))
 	damage = float(ammo.get("hull_damage"))
+	status_effects = ammo.get("status_effects")
 
 
 func _physics_process(delta: float) -> void:
@@ -42,6 +44,8 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("apply_hull_damage"):
 		body.call("apply_hull_damage", damage)
 		_spawn_impact()
+		if body.has_method("apply_status_effects"):
+			body.call("apply_status_effects", status_effects)
 	queue_free()
 
 

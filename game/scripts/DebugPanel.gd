@@ -37,9 +37,15 @@ func _process(_delta: float) -> void:
 			combat.port_cooldown,
 			combat.starboard_cooldown
 		]
+		if ship.has_method("get_hull_fraction"):
+			combat_text += "\nPlayer Hull: %.0f%%" % [ship.call("get_hull_fraction") * 100.0]
+		if ship.get("is_burning"):
+			combat_text += "\nPlayer: BURNING"
 	if target_ship:
 		var target_status := "SUNK" if target_ship.get("is_sunk") else "%.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
 		combat_text += "\nTarget Hull: %s" % target_status
+		if target_ship.get("is_burning"):
+			combat_text += "\nTarget: BURNING"
 
 	debug_label.text = "Speed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
 		values.speed,

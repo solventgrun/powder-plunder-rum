@@ -36,6 +36,7 @@ static func load_ammo_types() -> Dictionary:
 		ammo.set("sail_damage", float(damage.get("sail", 0.0)))
 		ammo.set("crew_damage", float(damage.get("crew", 0.0)))
 		ammo.set("morale_damage", float(damage.get("morale", 0.0)))
+		ammo.set("status_effects", record.get("status_effects", {}))
 		if not ammo.get("id").is_empty():
 			catalog[ammo.get("id")] = ammo
 	return catalog
@@ -58,7 +59,7 @@ static func _load_yaml_records(path: String, root_key: String) -> Array[Dictiona
 	var records: Array[Dictionary] = []
 	var in_root := false
 	var current: Dictionary = {}
-	var nested_key := ""
+	var nesting_path: Array = []
 
 	while not file.eof_reached():
 		var raw_line := file.get_line()
@@ -68,7 +69,7 @@ static func _load_yaml_records(path: String, root_key: String) -> Array[Dictiona
 
 		if not raw_line.begins_with(" "):
 			in_root = line == "%s:" % root_key
-			nested_key = ""
+			nesting_path = []
 			continue
 
 		if not in_root:
@@ -78,16 +79,19 @@ static func _load_yaml_records(path: String, root_key: String) -> Array[Dictiona
 			if not current.is_empty():
 				records.append(current)
 			current = {}
-			nested_key = ""
+			nesting_path = []
 			var remainder := line.substr(2).strip_edges()
 			if not remainder.is_empty():
-				nested_key = _set_record_value(current, remainder)
-		elif raw_line.begins_with("      ") and not nested_key.is_empty():
-			var nested: Dictionary = current.get(nested_key, {})
-			_set_record_value(nested, line)
-			current[nested_key] = nested
+				var key := _set_record_value(current, remainder)
+				nesting_path = [key] if not key.is_empty() else []
 		else:
-			nested_key = _set_record_value(current, line)
+			var indent := _count_leading_spaces(raw_line)
+			var depth := maxi(0, int(indent / 2) - 2)
+			nesting_path = nesting_path.slice(0, depth)
+			var target := _get_nested_dictionary(current, nesting_path)
+			var key := _set_record_value(target, line)
+			if not key.is_empty():
+				nesting_path.append(key)
 
 	if not current.is_empty():
 		records.append(current)
@@ -124,3 +128,22 @@ static func _parse_scalar(value_text: String) -> Variant:
 	if unquoted == "false":
 		return false
 	return unquoted
+
+
+static func _count_leading_spaces(text: String) -> int:
+	var count := 0
+	for character in text:
+		if character != " ":
+			break
+		count += 1
+	return count
+
+
+static func _get_nested_dictionary(root: Dictionary, path: Array) -> Dictionary:
+	var current: Dictionary = root
+	for key in path:
+		if not current.has(key) or not current[key] is Dictionary:
+			current[key] = {}
+		var next: Dictionary = current[key]
+		current = next
+	return current

@@ -19,10 +19,11 @@ func _run() -> void:
 	await _test_ammo_switch_cooldown(failures)
 	await _test_projectile_range_splash(failures)
 	await _test_cannon_hits_target(failures)
+	await _test_fire_status_effects(failures)
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, impact flash, sinking, and target damage.")
+		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -270,6 +271,69 @@ func _test_target_sinks_at_zero_hull(failures: Array[String]) -> void:
 		failures.append("Target should be marked sunk when hull reaches zero.")
 	if target.get("hull") != 0.0:
 		failures.append("Target hull should clamp to zero when sunk.")
+
+	_free_scene(scene)
+
+
+func _test_fire_status_effects(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "fire status effects")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var target := scene.get_node_or_null("TargetShip")
+	var broadside := _get_broadside(scene, failures)
+	if ship == null or target == null or broadside == null:
+		_free_scene(scene)
+		return
+
+	broadside.call("select_ammo_by_index", 3)
+	if broadside.get("selected_ammo_id") != "fire":
+		failures.append("Selecting ammo index 3 should switch to fire shot.")
+
+	var ammo = broadside.call("_get_ammo_type")
+	var effects: Dictionary = ammo.get("status_effects")
+	if not effects.has("burning"):
+		failures.append("Fire shot should define a burning status effect.")
+	else:
+		var burning: Dictionary = effects.burning
+		if float(burning.get("self_ignition_chance", 0.0)) <= 0.0:
+			failures.append("Fire shot should define self_ignition_chance.")
+
+	var forced_burning := {
+		"burning": {
+			"chance": 1.0,
+			"duration": 0.4,
+			"hull_damage_per_second": 10.0
+		}
+	}
+	var starting_hull: float = target.get("hull")
+	target.call("apply_status_effects", forced_burning)
+	await process_frame
+	if not target.get("is_burning"):
+		failures.append("Target should enter burning state from burning status effect.")
+
+	for index in range(30):
+		await process_frame
+
+	if target.get("hull") >= starting_hull:
+		failures.append("Burning status should deal hull damage over time.")
+
+	var self_effects := {
+		"burning": {
+			"self_ignition_chance": 1.0,
+			"duration": 0.4,
+			"hull_damage_per_second": 1.0
+		}
+	}
+	var rolled: Dictionary = broadside.call("_roll_self_status_effects", self_effects)
+	if not rolled.has("burning"):
+		failures.append("Self ignition roll with 100% chance should produce burning effect.")
+
+	ship.call("apply_status_effects", rolled)
+	await process_frame
+	if not ship.get("is_burning"):
+		failures.append("Player ship should be able to catch fire from self ignition.")
 
 	_free_scene(scene)
 

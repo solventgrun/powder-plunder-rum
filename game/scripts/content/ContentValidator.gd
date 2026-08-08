@@ -4,8 +4,9 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 
 const ID_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789_"
 const CANNON_FIELDS := ["id", "name", "type", "range", "reload_time", "weight", "projectile_speed"]
-const AMMO_FIELDS := ["id", "name", "range_multiplier", "damage"]
+const AMMO_FIELDS := ["id", "name", "range_multiplier", "damage", "status_effects"]
 const AMMO_DAMAGE_FIELDS := ["hull", "sail", "crew", "morale"]
+const STATUS_EFFECT_FIELDS := ["chance", "self_ignition_chance", "duration", "hull_damage_per_second"]
 
 
 static func validate_all() -> Dictionary:
@@ -60,10 +61,38 @@ static func validate_ammo_types(records: Array[Dictionary], errors: Array[String
 		for field in AMMO_DAMAGE_FIELDS:
 			_validate_non_negative_number("%s damage" % label, damage, field, errors)
 
+		if record.has("status_effects"):
+			_validate_status_effects(label, record.get("status_effects"), errors, warnings)
+
 
 static func _validate_records_present(root_key: String, records: Array[Dictionary], errors: Array[String]) -> void:
 	if records.is_empty():
 		errors.append("%s must contain at least one record." % root_key)
+
+
+static func _validate_status_effects(label: String, value: Variant, errors: Array[String], warnings: Array[String]) -> void:
+	if not value is Dictionary:
+		errors.append("%s status_effects must be a mapping." % label)
+		return
+
+	var status_effects: Dictionary = value
+	for effect_id in status_effects.keys():
+		var effect_label := "%s status_effects[%s]" % [label, effect_id]
+		_validate_id(effect_label, effect_id, errors)
+		if not status_effects[effect_id] is Dictionary:
+			errors.append("%s must be a mapping." % effect_label)
+			continue
+
+		var effect: Dictionary = status_effects[effect_id]
+		_warn_unknown_fields(effect_label, effect, STATUS_EFFECT_FIELDS, warnings)
+		if effect.has("chance"):
+			_validate_unit_number(effect_label, effect, "chance", errors)
+		if effect.has("self_ignition_chance"):
+			_validate_unit_number(effect_label, effect, "self_ignition_chance", errors)
+		if effect.has("duration"):
+			_validate_positive_number(effect_label, effect, "duration", errors)
+		if effect.has("hull_damage_per_second"):
+			_validate_non_negative_number(effect_label, effect, "hull_damage_per_second", errors)
 
 
 static func _validate_unique_ids(root_key: String, records: Array[Dictionary], errors: Array[String]) -> void:
@@ -119,6 +148,17 @@ static func _validate_non_negative_number(label: String, record: Dictionary, fie
 		return
 	if float(record[field]) < 0.0:
 		errors.append("%s field '%s' must be zero or greater." % [label, field])
+
+
+static func _validate_unit_number(label: String, record: Dictionary, field: String, errors: Array[String]) -> void:
+	if not record.has(field):
+		return
+	if not _is_number(record[field]):
+		errors.append("%s field '%s' must be numeric." % [label, field])
+		return
+	var value := float(record[field])
+	if value < 0.0 or value > 1.0:
+		errors.append("%s field '%s' must be between zero and one." % [label, field])
 
 
 static func _is_number(value: Variant) -> bool:
