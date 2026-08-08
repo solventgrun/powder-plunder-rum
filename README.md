@@ -4,7 +4,7 @@ Fortune favors the reckless.
 
 A retro-inspired pirate adventure built around sailing, naval combat, plunder, dynamic world simulation, and the questionable decision-making of heavily intoxicated sailors.
 
-This is a tiny Godot prototype for a future retro-style pirate adventure game. The long-term direction is colorful, campy, mechanically readable pirate adventuring with an early-3D feel, but the current milestone is only about one question: does steering a small wind-driven ship feel interesting enough to keep going?
+This is a tiny Godot prototype for a future retro-style pirate adventure game. The long-term direction is colorful, campy, mechanically readable pirate adventuring with an early-3D feel.
 
 Placeholder geometry is intentional. The ship is primitive, the ocean is simple, and polish is out of scope until the sailing feel is worth developing.
 
