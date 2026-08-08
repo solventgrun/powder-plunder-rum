@@ -11,7 +11,7 @@ First playable feedback after adding primitive broadside firing, ammo selection,
 ## Observations
 
 - Cannonballs moved too quickly to read clearly.
-- The first shot appeared to fire both sides, so broadside input needed a sanity pass.
+- The first shot appeared to fire both sides after pressing one fire key, so broadside input needed a sanity pass.
 - Firing needed immediate feedback at the ship.
 - Misses needed visible end-of-range feedback.
 - The target became easy to lose off screen.
@@ -24,7 +24,7 @@ First playable feedback after adding primitive broadside firing, ammo selection,
 - Added primitive muzzle flashes.
 - Added primitive splash markers when cannonballs reach max range.
 - Added a HUD target direction indicator.
-- Guarded broadside input so a single frame cannot trigger both sides accidentally.
+- Confirmed broadside input should allow deliberate two-key double-fire while preventing one-key accidental double-fire.
 
 ## Follow-Up
 

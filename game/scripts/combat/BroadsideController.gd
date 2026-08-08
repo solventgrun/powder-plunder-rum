@@ -42,9 +42,9 @@ func _process(delta: float) -> void:
 
 	var fire_port_pressed := Input.is_action_just_pressed("fire_port_broadside")
 	var fire_starboard_pressed := Input.is_action_just_pressed("fire_starboard_broadside")
-	if fire_port_pressed and not fire_starboard_pressed:
+	if fire_port_pressed:
 		fire_port()
-	elif fire_starboard_pressed and not fire_port_pressed:
+	if fire_starboard_pressed:
 		fire_starboard()
 
 
