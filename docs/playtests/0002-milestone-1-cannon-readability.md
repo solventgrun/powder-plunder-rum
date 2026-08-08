@@ -22,7 +22,11 @@ First playable feedback after adding primitive broadside firing, ammo selection,
 - Reduced cannon projectile speeds in YAML.
 - Reduced base sailing speed and acceleration.
 - Added primitive muzzle flashes.
+- Added a procedural placeholder cannon boom.
 - Added primitive splash markers when cannonballs reach max range.
+- Added primitive impact flashes on hits.
+- Added a sunk/disabled target state when hull reaches zero.
+- Added visible reload bars.
 - Added a HUD target direction indicator.
 - Confirmed broadside input should allow deliberate two-key double-fire while preventing one-key accidental double-fire.
 

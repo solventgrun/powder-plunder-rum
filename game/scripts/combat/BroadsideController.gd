@@ -94,6 +94,7 @@ func _fire_side(side: int) -> bool:
 	var parent_3d := get_parent() as Node3D
 	if parent_3d == null:
 		return false
+	var fired_any := false
 
 	for index in range(cannonballs_per_broadside):
 		var projectile := projectile_scene.instantiate()
@@ -116,13 +117,18 @@ func _fire_side(side: int) -> bool:
 		projectile_3d.global_position = parent_3d.global_position + basis * local_offset
 		projectile_3d.call("configure", direction, cannon, ammo, parent_3d)
 		_spawn_muzzle_flash(spawn_parent, projectile_3d.global_position)
+		fired_any = true
 
+	if fired_any:
+		var boom_player := get_node_or_null("CannonBoomPlayer")
+		if boom_player and boom_player.has_method("play_boom"):
+			boom_player.call("play_boom")
 	var reload_time: float = cannon.get("reload_time")
 	if side < 0:
 		port_cooldown = reload_time
 	else:
 		starboard_cooldown = reload_time
-	return true
+	return fired_any
 
 
 func _spawn_muzzle_flash(spawn_parent: Node, position: Vector3) -> void:

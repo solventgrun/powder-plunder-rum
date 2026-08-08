@@ -1,9 +1,10 @@
-[gd_scene load_steps=8 format=3 uid="uid://b8x4a6l72pirate"]
+[gd_scene load_steps=9 format=3 uid="uid://b8x4a6l72pirate"]
 
 [ext_resource type="Script" path="res://game/scripts/ShipController.gd" id="1_ship"]
 [ext_resource type="Script" path="res://game/scripts/SailingModel.gd" id="2_sail"]
 [ext_resource type="Script" path="res://game/scripts/combat/BroadsideController.gd" id="3_broadside"]
 [ext_resource type="PackedScene" path="res://game/scenes/Cannonball.tscn" id="4_cannonball"]
+[ext_resource type="Script" path="res://game/scripts/combat/CannonBoomPlayer.gd" id="5_boom"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
 size = Vector3(1.45, 0.55, 3.25)
@@ -40,3 +41,7 @@ script = ExtResource("2_sail")
 [node name="BroadsideController" type="Node" parent="."]
 script = ExtResource("3_broadside")
 projectile_scene = ExtResource("4_cannonball")
+
+[node name="CannonBoomPlayer" type="AudioStreamPlayer3D" parent="BroadsideController"]
+script = ExtResource("5_boom")
+volume_db = -7.0

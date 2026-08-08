@@ -38,7 +38,8 @@ func _process(_delta: float) -> void:
 			combat.starboard_cooldown
 		]
 	if target_ship:
-		combat_text += "\nTarget Hull: %.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
+		var target_status := "SUNK" if target_ship.get("is_sunk") else "%.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
+		combat_text += "\nTarget Hull: %s" % target_status
 
 	debug_label.text = "Speed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
 		values.speed,

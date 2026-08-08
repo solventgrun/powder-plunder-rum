@@ -19,9 +19,10 @@ func _run() -> void:
 	await _test_ammo_switch_cooldown(failures)
 	await _test_projectile_range_splash(failures)
 	await _test_cannon_hits_target(failures)
+	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, and target damage.")
+		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, impact flash, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -141,12 +142,16 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 		_free_scene(scene)
 		return
 
+	var saw_impact := false
 	for index in range(160):
 		await physics_frame
+		saw_impact = saw_impact or _scene_has_child_named(scene, "ImpactFlash")
 
 	var ending_hull: float = target.get("hull")
 	if ending_hull >= starting_hull:
 		failures.append("Target hull did not decrease after starboard broadside. Start: %.2f End: %.2f" % [starting_hull, ending_hull])
+	if not saw_impact:
+		failures.append("Cannon hit should spawn an impact flash.")
 
 	_free_scene(scene)
 
@@ -245,6 +250,28 @@ func _test_projectile_range_splash(failures: Array[String]) -> void:
 func _free_scene(scene: Node) -> void:
 	root.remove_child(scene)
 	scene.free()
+
+
+func _test_target_sinks_at_zero_hull(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "target sinking")
+	if scene == null:
+		return
+
+	var target := scene.get_node_or_null("TargetShip")
+	if target == null:
+		failures.append("Sinking test could not find TargetShip.")
+		_free_scene(scene)
+		return
+
+	target.call("apply_hull_damage", 999.0)
+	await process_frame
+
+	if not target.get("is_sunk"):
+		failures.append("Target should be marked sunk when hull reaches zero.")
+	if target.get("hull") != 0.0:
+		failures.append("Target hull should clamp to zero when sunk.")
+
+	_free_scene(scene)
 
 
 func _instantiate_main_scene(failures: Array[String], test_name: String) -> Node:

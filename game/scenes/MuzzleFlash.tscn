@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://muzzleflashproto"]
+[gd_scene format=3 uid="uid://dpwbelx6h1cfs"]
 
 [ext_resource type="Script" path="res://game/scripts/combat/TemporaryVisual.gd" id="1_temp"]
 
