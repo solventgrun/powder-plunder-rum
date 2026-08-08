@@ -6,7 +6,7 @@ A retro-inspired pirate adventure built around sailing, naval combat, plunder, d
 
 This is a tiny Godot prototype for a future retro-style pirate adventure game. The long-term direction is colorful, campy, mechanically readable pirate adventuring with an early-3D feel.
 
-Placeholder geometry is intentional. The ship is primitive, the ocean is simple, and polish is out of scope until the sailing feel is worth developing.
+Placeholder geometry is intentional. The ship is primitive, the ocean is simple, and polish is out of scope until the game play feels worthy of it.
 
 ## Requirements
 
