@@ -1,0 +1,36 @@
+ammo_types:
+  - id: round
+    name: Round Shot
+    range_multiplier: 1.0
+    damage:
+      hull: 12
+      sail: 2
+      crew: 2
+      morale: 3
+
+  - id: chain
+    name: Chain Shot
+    range_multiplier: 0.75
+    damage:
+      hull: 8
+      sail: 14
+      crew: 3
+      morale: 5
+
+  - id: grape
+    name: Grape Shot
+    range_multiplier: 0.55
+    damage:
+      hull: 4
+      sail: 2
+      crew: 16
+      morale: 10
+
+  - id: fire
+    name: Fire Shot
+    range_multiplier: 0.38
+    damage:
+      hull: 16
+      sail: 8
+      crew: 4
+      morale: 12

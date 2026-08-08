@@ -1,0 +1,16 @@
+cannon_types:
+  - id: light_4_pounder
+    name: Light 4-Pounder
+    type: naval
+    range: 52
+    reload_time: 1.4
+    weight: 600
+    projectile_speed: 34
+
+  - id: long_9_pounder
+    name: Long 9-Pounder
+    type: naval
+    range: 76
+    reload_time: 2.2
+    weight: 1350
+    projectile_speed: 46

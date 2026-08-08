@@ -1,0 +1,27 @@
+# Godot 4
+.godot/
+.godot-user/
+*.translation
+
+# Imported asset outputs
+*.import
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local agent/coding-assistant instructions
+AGENTS.md
+agent.md
+CLAUDE.md
+claude.md
+.agents/
+.codex/
+.claude/
+
+# Export/build outputs
+exports/
+builds/

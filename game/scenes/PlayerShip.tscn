@@ -1,0 +1,42 @@
+[gd_scene load_steps=8 format=3 uid="uid://b8x4a6l72pirate"]
+
+[ext_resource type="Script" path="res://game/scripts/ShipController.gd" id="1_ship"]
+[ext_resource type="Script" path="res://game/scripts/SailingModel.gd" id="2_sail"]
+[ext_resource type="Script" path="res://game/scripts/combat/BroadsideController.gd" id="3_broadside"]
+[ext_resource type="PackedScene" path="res://game/scenes/Cannonball.tscn" id="4_cannonball"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_hull"]
+size = Vector3(1.45, 0.55, 3.25)
+
+[sub_resource type="PrismMesh" id="PrismMesh_bow"]
+left_to_right = 1.45
+size = Vector3(1.45, 0.55, 1.1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ship"]
+size = Vector3(1.5, 0.65, 3.5)
+
+[node name="PlayerShip" type="CharacterBody3D"]
+script = ExtResource("1_ship")
+
+[node name="Hull" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("BoxMesh_hull")
+
+[node name="Bow" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.35, -2.0)
+mesh = SubResource("PrismMesh_bow")
+
+[node name="Mast" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.18, 0, 0, 0, 2.4, 0, 0, 0, 0.18, 0, 1.35, -0.15)
+mesh = SubResource("BoxMesh_hull")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.15)
+shape = SubResource("BoxShape3D_ship")
+
+[node name="SailingModel" type="Node" parent="."]
+script = ExtResource("2_sail")
+
+[node name="BroadsideController" type="Node" parent="."]
+script = ExtResource("3_broadside")
+projectile_scene = ExtResource("4_cannonball")
