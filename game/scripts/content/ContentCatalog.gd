@@ -2,6 +2,7 @@ extends RefCounted
 
 const CANNON_TYPES_PATH := "res://data/cannons/cannon_types.yaml"
 const AMMO_TYPES_PATH := "res://data/cannons/ammo_types.yaml"
+const PLAYER_SHIP_PATH := "res://data/ships/player_ship.yaml"
 const CANNON_TYPE_SCRIPT := preload("res://game/scripts/content/CannonType.gd")
 const AMMO_TYPE_SCRIPT := preload("res://game/scripts/content/AmmoType.gd")
 
@@ -42,12 +43,20 @@ static func load_ammo_types() -> Dictionary:
 	return catalog
 
 
+static func load_player_ship_loadout() -> Dictionary:
+	return load_player_ship_record()
+
+
 static func load_cannon_type_records() -> Array[Dictionary]:
 	return _load_yaml_records(CANNON_TYPES_PATH, "cannon_types")
 
 
 static func load_ammo_type_records() -> Array[Dictionary]:
 	return _load_yaml_records(AMMO_TYPES_PATH, "ammo_types")
+
+
+static func load_player_ship_record() -> Dictionary:
+	return _load_player_ship_record(PLAYER_SHIP_PATH)
 
 
 static func _load_yaml_records(path: String, root_key: String) -> Array[Dictionary]:
@@ -97,6 +106,48 @@ static func _load_yaml_records(path: String, root_key: String) -> Array[Dictiona
 		records.append(current)
 
 	return records
+
+
+static func _load_player_ship_record(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Could not open content file: %s" % path)
+		return {}
+
+	var root: Dictionary = {
+		"broadsides": {
+			"port": {"cannons": []},
+			"starboard": {"cannons": []}
+		}
+	}
+	var in_root := false
+	var current_side := ""
+	var in_cannons := false
+
+	while not file.eof_reached():
+		var raw_line := file.get_line()
+		var line := raw_line.strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+
+		if not raw_line.begins_with(" "):
+			in_root = line == "player_ship:"
+			current_side = ""
+			in_cannons = false
+			continue
+
+		if not in_root:
+			continue
+
+		if line == "port:" or line == "starboard:":
+			current_side = line.trim_suffix(":")
+			in_cannons = false
+		elif line == "cannons:" and not current_side.is_empty():
+			in_cannons = true
+		elif line.begins_with("- ") and in_cannons and not current_side.is_empty():
+			root.broadsides[current_side].cannons.append(_parse_scalar(line.substr(2).strip_edges()))
+
+	return root
 
 
 static func _set_record_value(record: Dictionary, line: String) -> String:

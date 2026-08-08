@@ -18,13 +18,13 @@ func _draw() -> void:
 	if broadside == null:
 		return
 
-	var port: float = broadside.get("port_cooldown")
-	var starboard: float = broadside.get("starboard_cooldown")
-	var cannon = broadside.call("_get_cannon_type")
-	var reload_time := maxf(0.01, float(cannon.get("reload_time")))
+	var port: float = float(broadside.get("port_cooldown"))
+	var starboard: float = float(broadside.get("starboard_cooldown"))
+	var port_reload_time: float = maxf(0.01, broadside.call("_get_side_reload_time", -1))
+	var starboard_reload_time: float = maxf(0.01, broadside.call("_get_side_reload_time", 1))
 
-	_draw_bar(Vector2(20.0, size.y - 58.0), Vector2(180.0, 16.0), "PORT", port, reload_time)
-	_draw_bar(Vector2(size.x - 200.0, size.y - 58.0), Vector2(180.0, 16.0), "STARBOARD", starboard, reload_time)
+	_draw_bar(Vector2(20.0, size.y - 58.0), Vector2(180.0, 16.0), "PORT", port, port_reload_time)
+	_draw_bar(Vector2(size.x - 200.0, size.y - 58.0), Vector2(180.0, 16.0), "STARBOARD", starboard, starboard_reload_time)
 
 
 func _draw_bar(position: Vector2, bar_size: Vector2, label: String, cooldown: float, reload_time: float) -> void:

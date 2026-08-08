@@ -14,3 +14,11 @@ cannon_types:
     reload_time: 2.2
     weight: 1350
     projectile_speed: 22
+
+  - id: long_12_pounder
+    name: Long 12-Pounder
+    type: naval
+    range: 96
+    reload_time: 2.8
+    weight: 1800
+    projectile_speed: 26

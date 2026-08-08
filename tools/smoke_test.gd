@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_sailing_model(failures)
 	await _test_main_scene_moves_ship(failures)
 	await _test_broadside_side_behavior(failures)
+	await _test_asymmetric_ship_loadout(failures)
 	await _test_ammo_switch_cooldown(failures)
 	await _test_projectile_range_splash(failures)
 	await _test_cannon_hits_target(failures)
@@ -23,7 +24,7 @@ func _run() -> void:
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, sinking, and target damage.")
+		print("Smoke test passed: sailing, content, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -206,6 +207,45 @@ func _test_ammo_switch_cooldown(failures: Array[String]) -> void:
 		failures.append("Selecting ammo index 1 should switch to chain shot.")
 	if broadside.get("port_cooldown") <= 0.0 or broadside.get("starboard_cooldown") <= 0.0:
 		failures.append("Changing ammo should put both broadsides into cooldown.")
+
+	_free_scene(scene)
+
+
+func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "asymmetric ship loadout")
+	if scene == null:
+		return
+
+	var broadside := _get_broadside(scene, failures)
+	if broadside == null:
+		_free_scene(scene)
+		return
+
+	var port_cannons: Array = broadside.call("_get_side_cannons", -1)
+	var starboard_cannons: Array = broadside.call("_get_side_cannons", 1)
+	if port_cannons.size() != 3:
+		failures.append("Port loadout should contain 3 cannons for the current prototype. Found %d: %s" % [port_cannons.size(), broadside.call("_get_side_cannon_ids", -1)])
+	if starboard_cannons.size() != 3:
+		failures.append("Starboard loadout should contain 3 cannons for the current prototype. Found %d: %s" % [starboard_cannons.size(), broadside.call("_get_side_cannon_ids", 1)])
+
+	var port_range: float = broadside.call("_get_side_max_range", -1)
+	var starboard_range: float = broadside.call("_get_side_max_range", 1)
+	if not starboard_range > port_range:
+		failures.append("Starboard mixed long-cannon loadout should outrange port.")
+
+	var port_reload: float = broadside.call("_get_side_reload_time", -1)
+	var starboard_reload: float = broadside.call("_get_side_reload_time", 1)
+	if not starboard_reload > port_reload:
+		failures.append("Starboard mixed long-cannon loadout should reload slower than port.")
+
+	var port_weight: float = broadside.call("_get_side_weight", -1)
+	var starboard_weight: float = broadside.call("_get_side_weight", 1)
+	if not starboard_weight > port_weight:
+		failures.append("Starboard mixed long-cannon loadout should weigh more than port.")
+
+	var total_weight: float = broadside.call("get_total_cannon_weight")
+	if not is_equal_approx(total_weight, port_weight + starboard_weight):
+		failures.append("Total cannon weight should equal port plus starboard cannon weight.")
 
 	_free_scene(scene)
 

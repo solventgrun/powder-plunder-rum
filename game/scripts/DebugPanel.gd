@@ -31,11 +31,13 @@ func _process(_delta: float) -> void:
 	var combat_text := ""
 	if broadside_controller:
 		var combat: Dictionary = broadside_controller.call("get_debug_values")
-		combat_text = "\nCannon: %s\nAmmo: %s\nPort Reload: %.1fs\nStarboard Reload: %.1fs" % [
-			combat.cannon_name,
+		combat_text = "\nAmmo: %s\nPort: %s\nStarboard: %s\nPort Reload: %.1fs\nStarboard Reload: %.1fs\nCannon Weight: %.0f" % [
 			combat.ammo_name,
+			combat.port_label,
+			combat.starboard_label,
 			combat.port_cooldown,
-			combat.starboard_cooldown
+			combat.starboard_cooldown,
+			combat.total_weight
 		]
 		if ship.has_method("get_hull_fraction"):
 			combat_text += "\nPlayer Hull: %.0f%%" % [ship.call("get_hull_fraction") * 100.0]

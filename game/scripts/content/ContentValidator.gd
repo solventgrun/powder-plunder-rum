@@ -7,6 +7,10 @@ const CANNON_FIELDS := ["id", "name", "type", "range", "reload_time", "weight", 
 const AMMO_FIELDS := ["id", "name", "range_multiplier", "damage", "status_effects"]
 const AMMO_DAMAGE_FIELDS := ["hull", "sail", "crew", "morale"]
 const STATUS_EFFECT_FIELDS := ["chance", "self_ignition_chance", "duration", "hull_damage_per_second"]
+const SHIP_FIELDS := ["broadsides"]
+const BROADSIDES_FIELDS := ["port", "starboard"]
+const BROADSIDE_FIELDS := ["cannons"]
+const PROTOTYPE_BROADSIDE_LIMIT := 3
 
 
 static func validate_all() -> Dictionary:
@@ -15,6 +19,7 @@ static func validate_all() -> Dictionary:
 
 	validate_cannon_types(ContentCatalog.load_cannon_type_records(), errors, warnings)
 	validate_ammo_types(ContentCatalog.load_ammo_type_records(), errors, warnings)
+	validate_player_ship(ContentCatalog.load_player_ship_record(), ContentCatalog.load_cannon_types(), errors, warnings)
 
 	return {
 		"errors": errors,
@@ -63,6 +68,47 @@ static func validate_ammo_types(records: Array[Dictionary], errors: Array[String
 
 		if record.has("status_effects"):
 			_validate_status_effects(label, record.get("status_effects"), errors, warnings)
+
+
+static func validate_player_ship(record: Dictionary, cannon_types: Dictionary, errors: Array[String], warnings: Array[String]) -> void:
+	if record.is_empty():
+		errors.append("player_ship must contain a loadout record.")
+		return
+
+	_warn_unknown_fields("player_ship", record, SHIP_FIELDS, warnings)
+	_validate_required_fields("player_ship", record, ["broadsides"], errors)
+	if not record.get("broadsides") is Dictionary:
+		errors.append("player_ship broadsides must be a mapping.")
+		return
+
+	var broadsides: Dictionary = record.get("broadsides")
+	_warn_unknown_fields("player_ship broadsides", broadsides, BROADSIDES_FIELDS, warnings)
+	for side in BROADSIDES_FIELDS:
+		if not broadsides.has(side):
+			errors.append("player_ship broadsides missing required side '%s'." % side)
+			continue
+		if not broadsides[side] is Dictionary:
+			errors.append("player_ship broadsides.%s must be a mapping." % side)
+			continue
+
+		var broadside: Dictionary = broadsides[side]
+		var label := "player_ship broadsides.%s" % side
+		_warn_unknown_fields(label, broadside, BROADSIDE_FIELDS, warnings)
+		_validate_required_fields(label, broadside, ["cannons"], errors)
+		if not broadside.get("cannons") is Array:
+			errors.append("%s cannons must be a list." % label)
+			continue
+
+		var cannons: Array = broadside.get("cannons")
+		if cannons.is_empty():
+			errors.append("%s cannons must contain at least one cannon id." % label)
+		if cannons.size() > PROTOTYPE_BROADSIDE_LIMIT:
+			warnings.append("%s has %d cannons. Prototype player ship is currently tuned for %d per side." % [label, cannons.size(), PROTOTYPE_BROADSIDE_LIMIT])
+		for cannon_id in cannons:
+			var id := str(cannon_id)
+			_validate_id("%s cannon id" % label, id, errors)
+			if not cannon_types.has(id):
+				errors.append("%s references unknown cannon id '%s'." % [label, id])
 
 
 static func _validate_records_present(root_key: String, records: Array[Dictionary], errors: Array[String]) -> void:

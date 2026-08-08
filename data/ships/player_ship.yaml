@@ -1,0 +1,12 @@
+player_ship:
+  broadsides:
+    port:
+      cannons:
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+    starboard:
+      cannons:
+        - light_4_pounder
+        - long_12_pounder
+        - long_12_pounder

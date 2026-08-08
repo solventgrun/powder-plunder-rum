@@ -5,14 +5,13 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 
 @export var projectile_scene: PackedScene
-@export var cannon_type_id: String = "light_4_pounder"
 @export var default_ammo_id: String = "round"
-@export_range(1, 8, 1) var cannonballs_per_broadside: int = 3
 @export_range(0.1, 3.0, 0.05) var muzzle_spacing: float = 0.75
 @export_range(0.0, 15.0, 0.5, "degrees") var spread_degrees: float = 4.0
 
 var cannon_types: Dictionary = {}
 var ammo_types: Dictionary = {}
+var ship_loadout: Dictionary = {}
 var ammo_order: Array[String] = ["round", "chain", "grape", "fire"]
 var selected_ammo_id: String = "round"
 var port_cooldown: float = 0.0
@@ -22,6 +21,7 @@ var starboard_cooldown: float = 0.0
 func _ready() -> void:
 	cannon_types = ContentCatalog.load_cannon_types()
 	ammo_types = ContentCatalog.load_ammo_types()
+	ship_loadout = ContentCatalog.load_player_ship_loadout()
 	selected_ammo_id = default_ammo_id
 	if not ammo_types.has(selected_ammo_id) and not ammo_types.is_empty():
 		selected_ammo_id = ammo_types.keys()[0]
@@ -57,9 +57,8 @@ func select_ammo_by_index(index: int) -> void:
 		return
 
 	selected_ammo_id = next_ammo_id
-	var reload_time: float = _get_cannon_type().get("reload_time")
-	port_cooldown = maxf(port_cooldown, reload_time)
-	starboard_cooldown = maxf(starboard_cooldown, reload_time)
+	port_cooldown = maxf(port_cooldown, _get_side_reload_time(-1))
+	starboard_cooldown = maxf(starboard_cooldown, _get_side_reload_time(1))
 
 
 func fire_port() -> bool:
@@ -71,13 +70,22 @@ func fire_starboard() -> bool:
 
 
 func get_debug_values() -> Dictionary:
-	var cannon := _get_cannon_type()
 	var ammo := _get_ammo_type()
 	return {
-		"cannon_name": cannon.get("display_name"),
-		"ammo_name": ammo.get("display_name"),
+		"ammo_name": ammo.get("display_name") if ammo else "No Ammo",
 		"port_cooldown": port_cooldown,
-		"starboard_cooldown": starboard_cooldown
+		"starboard_cooldown": starboard_cooldown,
+		"port_count": _get_side_cannons(-1).size(),
+		"starboard_count": _get_side_cannons(1).size(),
+		"port_weight": _get_side_weight(-1),
+		"starboard_weight": _get_side_weight(1),
+		"total_weight": get_total_cannon_weight(),
+		"port_reload_time": _get_side_reload_time(-1),
+		"starboard_reload_time": _get_side_reload_time(1),
+		"port_range": _get_side_max_range(-1),
+		"starboard_range": _get_side_max_range(1),
+		"port_label": _get_side_label(-1),
+		"starboard_label": _get_side_label(1)
 	}
 
 
@@ -89,7 +97,10 @@ func _fire_side(side: int) -> bool:
 	if side > 0 and starboard_cooldown > 0.0:
 		return false
 
-	var cannon := _get_cannon_type()
+	var side_cannons := _get_side_cannons(side)
+	if side_cannons.is_empty():
+		return false
+
 	var ammo := _get_ammo_type()
 	var parent_3d := get_parent() as Node3D
 	if parent_3d == null:
@@ -97,14 +108,15 @@ func _fire_side(side: int) -> bool:
 	var fired_any := false
 	var self_status_effects: Dictionary = {}
 
-	for index in range(cannonballs_per_broadside):
+	for index in range(side_cannons.size()):
+		var cannon: Resource = side_cannons[index]
 		var projectile := projectile_scene.instantiate()
 		var projectile_3d := projectile as Node3D
 		if projectile_3d == null:
 			projectile.queue_free()
 			continue
 
-		var center_offset := float(index) - float(cannonballs_per_broadside - 1) * 0.5
+		var center_offset := float(index) - float(side_cannons.size() - 1) * 0.5
 		var local_offset := Vector3(side * 1.05, 0.45, center_offset * muzzle_spacing)
 		var basis := parent_3d.global_transform.basis
 		var direction := (basis.x * side).normalized()
@@ -128,7 +140,7 @@ func _fire_side(side: int) -> bool:
 		var boom_player := get_node_or_null("CannonBoomPlayer")
 		if boom_player and boom_player.has_method("play_boom"):
 			boom_player.call("play_boom")
-	var reload_time: float = cannon.get("reload_time")
+	var reload_time: float = _get_side_reload_time(side)
 	if side < 0:
 		port_cooldown = reload_time
 	else:
@@ -161,13 +173,65 @@ func _spawn_muzzle_flash(spawn_parent: Node, position: Vector3) -> void:
 	flash.global_position = position
 
 
-func _get_cannon_type() -> Resource:
-	if cannon_types.has(cannon_type_id):
-		return cannon_types[cannon_type_id]
-	return cannon_types.values()[0]
-
-
 func _get_ammo_type() -> Resource:
 	if ammo_types.has(selected_ammo_id):
 		return ammo_types[selected_ammo_id]
-	return ammo_types.values()[0]
+	if not ammo_types.is_empty():
+		return ammo_types.values()[0]
+	return null
+
+
+func _get_side_cannons(side: int) -> Array[Resource]:
+	var ids := _get_side_cannon_ids(side)
+	var cannons: Array[Resource] = []
+	for cannon_id in ids:
+		if cannon_types.has(cannon_id):
+			cannons.append(cannon_types[cannon_id])
+	return cannons
+
+
+func _get_side_cannon_ids(side: int) -> Array:
+	var side_name := "port" if side < 0 else "starboard"
+	var broadsides: Dictionary = ship_loadout.get("broadsides", {})
+	var broadside: Dictionary = broadsides.get(side_name, {})
+	return broadside.get("cannons", [])
+
+
+func _get_side_reload_time(side: int) -> float:
+	var reload_time := 0.0
+	for cannon in _get_side_cannons(side):
+		reload_time = maxf(reload_time, float(cannon.get("reload_time")))
+	return reload_time
+
+
+func _get_side_weight(side: int) -> float:
+	var weight := 0.0
+	for cannon in _get_side_cannons(side):
+		weight += float(cannon.get("weight"))
+	return weight
+
+
+func get_total_cannon_weight() -> float:
+	return _get_side_weight(-1) + _get_side_weight(1)
+
+
+func _get_side_max_range(side: int) -> float:
+	var range := 0.0
+	for cannon in _get_side_cannons(side):
+		range = maxf(range, float(cannon.get("range")))
+	var ammo := _get_ammo_type()
+	if ammo == null:
+		return range
+	return range * float(ammo.get("range_multiplier"))
+
+
+func _get_side_label(side: int) -> String:
+	var counts := {}
+	for cannon in _get_side_cannons(side):
+		var name := str(cannon.get("display_name"))
+		counts[name] = int(counts.get(name, 0)) + 1
+
+	var parts: Array[String] = []
+	for name in counts.keys():
+		parts.append("%dx %s" % [counts[name], name])
+	return ", ".join(parts)
