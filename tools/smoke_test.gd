@@ -138,7 +138,7 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 		_free_scene(scene)
 		return
 
-	for index in range(80):
+	for index in range(160):
 		await physics_frame
 
 	var ending_hull: float = target.get("hull")

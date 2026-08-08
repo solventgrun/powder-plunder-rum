@@ -1,6 +1,8 @@
 extends Area3D
 class_name Cannonball
 
+const SplashScene := preload("res://game/scenes/Splash.tscn")
+
 @export var fallback_speed: float = 30.0
 @export var fallback_range: float = 30.0
 @export var fallback_damage: float = 4.0
@@ -29,6 +31,7 @@ func _physics_process(delta: float) -> void:
 	global_position += direction * travel
 	remaining_range -= travel
 	if remaining_range <= 0.0:
+		_spawn_splash()
 		queue_free()
 
 
@@ -38,3 +41,17 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("apply_hull_damage"):
 		body.call("apply_hull_damage", damage)
 	queue_free()
+
+
+func _spawn_splash() -> void:
+	var spawn_parent := get_tree().current_scene
+	if spawn_parent == null:
+		spawn_parent = get_parent()
+	if spawn_parent == null:
+		return
+
+	var splash := SplashScene.instantiate() as Node3D
+	if splash == null:
+		return
+	spawn_parent.add_child(splash)
+	splash.global_position = Vector3(global_position.x, 0.04, global_position.z)

@@ -1,9 +1,9 @@
 extends Node
 class_name SailingModel
 
-@export_range(0.0, 40.0, 0.1) var max_speed: float = 14.0
-@export_range(0.0, 30.0, 0.1) var acceleration: float = 5.5
-@export_range(0.0, 30.0, 0.1) var deceleration: float = 3.2
+@export_range(0.0, 40.0, 0.1) var max_speed: float = 9.0
+@export_range(0.0, 30.0, 0.1) var acceleration: float = 3.8
+@export_range(0.0, 30.0, 0.1) var deceleration: float = 2.6
 @export_range(0.0, 180.0, 1.0, "degrees_per_second") var turn_rate: float = 70.0
 @export_range(0.0, 90.0, 1.0, "degrees_per_second") var minimum_turn_rate: float = 18.0
 @export_range(0.0, 1.0, 0.01) var headwind_efficiency: float = 0.04

@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://n7tq0mt3pirate"]
+[gd_scene load_steps=15 format=3 uid="uid://n7tq0mt3pirate"]
 
 [ext_resource type="PackedScene" path="res://game/scenes/PlayerShip.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/scripts/WindSystem.gd" id="2_wind"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://game/scripts/DebugPanel.gd" id="4_debug"]
 [ext_resource type="Script" path="res://game/scripts/WindIndicator.gd" id="5_indicator"]
 [ext_resource type="PackedScene" path="res://game/scenes/TargetShip.tscn" id="6_target"]
+[ext_resource type="Script" path="res://game/scripts/ui/TargetIndicator.gd" id="7_target_indicator"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
 size = Vector2(280, 280)
@@ -87,5 +88,17 @@ offset_right = -22.0
 offset_bottom = 146.0
 grow_horizontal = 0
 script = ExtResource("5_indicator")
+
+[node name="TargetIndicator" type="Control" parent="Debug"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("7_target_indicator")
+ship_path = NodePath("../../PlayerShip")
+target_path = NodePath("../../TargetShip")
 
 [editable path="PlayerShip"]

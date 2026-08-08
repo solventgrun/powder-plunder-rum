@@ -29,6 +29,7 @@ Small code-level details do not need ADRs. Put those in code comments only when 
 
 - Design brief: [Pirate Game Design Principles and Expansion Brief](design/pirate-game-design-principles-and-expansion-brief.md)
 - Playtest notes: [Playtest 0001: Milestone 0 Sailing Feel](playtests/0001-milestone-0-sailing-feel.md)
+- Playtest notes: [Playtest 0002: Milestone 1 Cannon Readability](playtests/0002-milestone-1-cannon-readability.md)
 
 ## Template
 

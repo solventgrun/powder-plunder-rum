@@ -2,6 +2,7 @@ extends Node
 class_name BroadsideController
 
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
+const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 
 @export var projectile_scene: PackedScene
 @export var cannon_type_id: String = "light_4_pounder"
@@ -39,9 +40,11 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("select_ammo_4"):
 		select_ammo_by_index(3)
 
-	if Input.is_action_just_pressed("fire_port_broadside"):
+	var fire_port_pressed := Input.is_action_just_pressed("fire_port_broadside")
+	var fire_starboard_pressed := Input.is_action_just_pressed("fire_starboard_broadside")
+	if fire_port_pressed and not fire_starboard_pressed:
 		fire_port()
-	if Input.is_action_just_pressed("fire_starboard_broadside"):
+	elif fire_starboard_pressed and not fire_port_pressed:
 		fire_starboard()
 
 
@@ -112,6 +115,7 @@ func _fire_side(side: int) -> bool:
 		spawn_parent.add_child(projectile_3d)
 		projectile_3d.global_position = parent_3d.global_position + basis * local_offset
 		projectile_3d.call("configure", direction, cannon, ammo, parent_3d)
+		_spawn_muzzle_flash(spawn_parent, projectile_3d.global_position)
 
 	var reload_time: float = cannon.get("reload_time")
 	if side < 0:
@@ -119,6 +123,14 @@ func _fire_side(side: int) -> bool:
 	else:
 		starboard_cooldown = reload_time
 	return true
+
+
+func _spawn_muzzle_flash(spawn_parent: Node, position: Vector3) -> void:
+	var flash := MuzzleFlashScene.instantiate() as Node3D
+	if flash == null:
+		return
+	spawn_parent.add_child(flash)
+	flash.global_position = position
 
 
 func _get_cannon_type() -> Resource:

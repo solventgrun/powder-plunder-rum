@@ -5,7 +5,7 @@ cannon_types:
     range: 52
     reload_time: 1.4
     weight: 600
-    projectile_speed: 34
+    projectile_speed: 16
 
   - id: long_9_pounder
     name: Long 9-Pounder
@@ -13,4 +13,4 @@ cannon_types:
     range: 76
     reload_time: 2.2
     weight: 1350
-    projectile_speed: 46
+    projectile_speed: 22
