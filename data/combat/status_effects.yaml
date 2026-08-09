@@ -4,6 +4,7 @@ fire_levels:
     visual_scale: 0.75
     hull_damage_per_second: 1.0
     duration: 5.0
+    growth_chance_per_second: 0.08
     magazine_explosion_chance_per_second: 0.005
 
   - id: medium
@@ -11,6 +12,7 @@ fire_levels:
     visual_scale: 1.1
     hull_damage_per_second: 3.0
     duration: 6.0
+    growth_chance_per_second: 0.12
     magazine_explosion_chance_per_second: 0.02
 
   - id: large
@@ -18,4 +20,5 @@ fire_levels:
     visual_scale: 1.55
     hull_damage_per_second: 6.0
     duration: 8.0
+    growth_chance_per_second: 0.0
     magazine_explosion_chance_per_second: 0.07

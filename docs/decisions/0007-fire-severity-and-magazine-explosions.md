@@ -16,7 +16,7 @@ Define fire severity levels in `data/combat/status_effects.yaml`:
 - medium fire
 - large fire
 
-Fire severity controls hull damage over time, duration, visual scale, and per-second magazine explosion chance. Repeated fire applications escalate severity.
+Fire severity controls hull damage over time, duration, visual scale, per-second growth chance, and per-second magazine explosion chance. Repeated fire applications escalate severity, and fires may now grow on their own over time.
 
 Round shot has a low direct `magazine_explosion` chance. Burning ships also roll magazine explosion chance over time, modified by the ship's `magazine_explosion_multiplier`.
 

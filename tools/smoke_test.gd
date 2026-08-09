@@ -105,6 +105,19 @@ func _test_ship_stats(failures: Array[String]) -> void:
 		if not target_stats.get("modification_ids").has(str(modification_id)):
 			failures.append("Target ship stats should include configured modification '%s'." % str(modification_id))
 
+	var sloop: Dictionary = ship_types.get("sloop", {})
+	var galleon: Dictionary = ship_types.get("galleon", {})
+	var sloop_sailing: Dictionary = sloop.get("sailing", {})
+	var sloop_combat: Dictionary = sloop.get("combat", {})
+	var galleon_sailing: Dictionary = galleon.get("sailing", {})
+	var galleon_combat: Dictionary = galleon.get("combat", {})
+	if not float(sloop_sailing.get("max_speed", 0.0)) > float(galleon_sailing.get("max_speed", 999.0)):
+		failures.append("Sloops should be faster than galleons.")
+	if not float(sloop_sailing.get("turn_rate", 0.0)) > float(galleon_sailing.get("turn_rate", 999.0)):
+		failures.append("Sloops should turn better than galleons.")
+	if not float(galleon_combat.get("max_hull", 0.0)) > float(sloop_combat.get("max_hull", 999.0)):
+		failures.append("Galleons should have more hull than sloops.")
+
 
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	var packed := load(MAIN_SCENE_PATH)
@@ -412,6 +425,13 @@ func _test_fire_status_effects(failures: Array[String]) -> void:
 	await process_frame
 	if target.get("burning_severity") != "medium":
 		failures.append("Second burning status should escalate fire to medium severity.")
+
+	target.set("burning_growth_chance_per_second", 1.0)
+	target.set("burning_magazine_explosion_chance_per_second", 0.0)
+	target.set("burning_growth_tick", 1.0)
+	await process_frame
+	if target.get("burning_severity") != "large":
+		failures.append("Burning status should be able to grow on its own over time.")
 
 	for index in range(30):
 		await process_frame

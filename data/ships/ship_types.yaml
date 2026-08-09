@@ -1,14 +1,14 @@
 ship_types:
   - id: sloop
     name: Sloop
-    visual_scale: 0.82
+    visual_scale: 0.75
     sailing:
-      max_speed: 11.0
-      acceleration: 4.7
-      deceleration: 3.0
-      turn_rate: 88
+      max_speed: 6.2
+      acceleration: 2.7
+      deceleration: 1.7
+      turn_rate: 78
     combat:
-      max_hull: 45
+      max_hull: 110
       magazine_explosion_multiplier: 1.35
       max_cannons_per_side: 3
       cannon_weight_capacity: 2600
@@ -17,40 +17,40 @@ ship_types:
     name: Brig
     visual_scale: 1.0
     sailing:
-      max_speed: 9.0
-      acceleration: 3.8
-      deceleration: 2.6
-      turn_rate: 70
+      max_speed: 5.3
+      acceleration: 2.1
+      deceleration: 1.45
+      turn_rate: 56
     combat:
-      max_hull: 80
+      max_hull: 180
       magazine_explosion_multiplier: 1.0
       max_cannons_per_side: 5
       cannon_weight_capacity: 6500
 
   - id: frigate
     name: Frigate
-    visual_scale: 1.18
+    visual_scale: 1.35
     sailing:
-      max_speed: 8.2
-      acceleration: 3.2
-      deceleration: 2.4
-      turn_rate: 58
+      max_speed: 4.6
+      acceleration: 1.55
+      deceleration: 1.15
+      turn_rate: 38
     combat:
-      max_hull: 120
+      max_hull: 280
       magazine_explosion_multiplier: 0.8
       max_cannons_per_side: 8
       cannon_weight_capacity: 12000
 
   - id: galleon
     name: Galleon
-    visual_scale: 1.38
+    visual_scale: 1.65
     sailing:
-      max_speed: 6.5
-      acceleration: 2.2
-      deceleration: 1.8
-      turn_rate: 42
+      max_speed: 3.5
+      acceleration: 1.0
+      deceleration: 0.85
+      turn_rate: 24
     combat:
-      max_hull: 180
+      max_hull: 430
       magazine_explosion_multiplier: 0.55
       max_cannons_per_side: 12
       cannon_weight_capacity: 22000

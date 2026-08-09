@@ -58,6 +58,8 @@ The current player ship uses `brig` plus `copper_bottom`, which should make it s
 
 The current target ship lives in [data/ships/target_ship.yaml](../data/ships/target_ship.yaml). Change its `ship_type` between `sloop`, `brig`, `frigate`, and `galleon` to test target size, hull durability, and magazine explosion risk. Add modifications there to verify target-side stat layering without changing the player ship.
 
+Ship speeds are intentionally tuned closer to sailing craft than speedboats. Larger ships should have more hull and worse turning, so compare a `sloop` against a `galleon` when testing handling extremes.
+
 ### Fire Severity and Magazine Explosions
 
 Fire levels live in [data/combat/status_effects.yaml](../data/combat/status_effects.yaml).
@@ -70,6 +72,8 @@ small -> medium -> large
 
 Round shot has a low direct magazine explosion chance. Burning ships roll an explosion chance over time based on fire severity and ship explosion multiplier.
 
+Fires can also grow on their own. The debug UI should progress from `BURNING (small)` toward `BURNING (medium)` or `BURNING (large)` sometimes without another fire shot. The smoke test forces this path once so the behavior is automatically covered even when random playtesting does not trigger it.
+
 ## Editor Checks
 
 Open [game/scenes/Main.tscn](../game/scenes/Main.tscn), run the game, and try:
@@ -80,5 +84,6 @@ Open [game/scenes/Main.tscn](../game/scenes/Main.tscn), run the game, and try:
 - select grape or fire shot and verify you need to get much closer
 - use fire shot and watch for burning on either ship
 - swap the target ship type in YAML and confirm the debug UI, target size, hull durability, and explosion feel change
+- compare small ships and large ships for slower speed, heavier turning, and longer time-to-sink
 
 If behavior changes because of YAML edits, run content validation before opening the editor.

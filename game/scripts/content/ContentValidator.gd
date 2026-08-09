@@ -19,7 +19,7 @@ const SHIP_MODIFICATION_FIELDS := ["id", "name", "modifiers"]
 const SHIP_MODIFIERS_FIELDS := ["sailing", "combat"]
 const SHIP_MODIFIER_SAILING_FIELDS := ["max_speed_multiplier", "acceleration_multiplier", "deceleration_multiplier", "turn_rate_multiplier"]
 const SHIP_MODIFIER_COMBAT_FIELDS := ["max_hull_multiplier", "magazine_explosion_multiplier"]
-const FIRE_LEVEL_FIELDS := ["id", "name", "visual_scale", "hull_damage_per_second", "duration", "magazine_explosion_chance_per_second"]
+const FIRE_LEVEL_FIELDS := ["id", "name", "visual_scale", "hull_damage_per_second", "duration", "growth_chance_per_second", "magazine_explosion_chance_per_second"]
 const PROTOTYPE_BROADSIDE_LIMIT := 3
 
 
@@ -141,6 +141,7 @@ static func validate_fire_levels(records: Array[Dictionary], errors: Array[Strin
 		_validate_positive_number(label, record, "visual_scale", errors)
 		_validate_non_negative_number(label, record, "hull_damage_per_second", errors)
 		_validate_positive_number(label, record, "duration", errors)
+		_validate_unit_number(label, record, "growth_chance_per_second", errors)
 		_validate_unit_number(label, record, "magazine_explosion_chance_per_second", errors)
 
 

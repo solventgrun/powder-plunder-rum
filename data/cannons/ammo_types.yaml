@@ -9,7 +9,7 @@ ammo_types:
       morale: 3
     status_effects:
       magazine_explosion:
-        chance: 0.02
+        chance: 0.04
 
   - id: chain
     name: Chain Shot

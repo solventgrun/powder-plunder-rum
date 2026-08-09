@@ -21,6 +21,8 @@ var burning_time_remaining: float = 0.0
 var burning_hull_damage_per_second: float = 0.0
 var burning_magazine_explosion_chance_per_second: float = 0.0
 var burning_explosion_tick: float = 0.0
+var burning_growth_chance_per_second: float = 0.0
+var burning_growth_tick: float = 0.0
 var fire_levels: Dictionary = {}
 
 var flame_visual: Node3D
@@ -40,6 +42,11 @@ func _process(delta: float) -> void:
 	if burning_hull_damage_per_second > 0.0:
 		apply_hull_damage(burning_hull_damage_per_second * delta)
 	burning_explosion_tick += delta
+	burning_growth_tick += delta
+	if burning_growth_chance_per_second > 0.0 and burning_growth_tick >= 1.0:
+		burning_growth_tick = 0.0
+		if randf() <= burning_growth_chance_per_second:
+			_apply_burning(_next_fire_severity(burning_severity))
 	if burning_magazine_explosion_chance_per_second > 0.0 and burning_explosion_tick >= 1.0:
 		burning_explosion_tick = 0.0
 		if randf() <= burning_magazine_explosion_chance_per_second * magazine_explosion_multiplier:
@@ -99,6 +106,7 @@ func _apply_burning(severity: String) -> void:
 	burning_severity = next_severity
 	burning_time_remaining = maxf(burning_time_remaining, float(level.get("duration", 5.0)))
 	burning_hull_damage_per_second = float(level.get("hull_damage_per_second", 1.0))
+	burning_growth_chance_per_second = float(level.get("growth_chance_per_second", 0.0))
 	burning_magazine_explosion_chance_per_second = float(level.get("magazine_explosion_chance_per_second", 0.0))
 	if flame_visual == null:
 		flame_visual = BurningFlameScene.instantiate() as Node3D
@@ -114,8 +122,10 @@ func _stop_burning() -> void:
 	burning_severity = ""
 	burning_time_remaining = 0.0
 	burning_hull_damage_per_second = 0.0
+	burning_growth_chance_per_second = 0.0
 	burning_magazine_explosion_chance_per_second = 0.0
 	burning_explosion_tick = 0.0
+	burning_growth_tick = 0.0
 	if flame_visual:
 		flame_visual.queue_free()
 		flame_visual = null
@@ -134,11 +144,27 @@ func _apply_ship_type() -> void:
 func _escalate_fire_severity(incoming_severity: String) -> String:
 	if not is_burning:
 		return incoming_severity
-	if burning_severity == "small":
+	if _fire_severity_rank(incoming_severity) > _fire_severity_rank(burning_severity):
+		return incoming_severity
+	return _next_fire_severity(burning_severity)
+
+
+func _next_fire_severity(severity: String) -> String:
+	if severity == "small":
 		return "medium"
-	if burning_severity == "medium":
+	if severity == "medium":
 		return "large"
 	return "large"
+
+
+func _fire_severity_rank(severity: String) -> int:
+	if severity == "large":
+		return 3
+	if severity == "medium":
+		return 2
+	if severity == "small":
+		return 1
+	return 0
 
 
 func _explode() -> void:
