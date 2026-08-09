@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://burningflameproto"]
+[gd_scene format=3 uid="uid://wp6sgglms4qa"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_flame"]
 radius = 0.32

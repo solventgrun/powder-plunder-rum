@@ -7,6 +7,9 @@ ammo_types:
       sail: 2
       crew: 2
       morale: 3
+    status_effects:
+      magazine_explosion:
+        chance: 0.02
 
   - id: chain
     name: Chain Shot
@@ -36,7 +39,6 @@ ammo_types:
       morale: 12
     status_effects:
       burning:
+        severity: small
         chance: 1.0
         self_ignition_chance: 0.15
-        duration: 5.0
-        hull_damage_per_second: 2.0

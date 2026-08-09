@@ -48,6 +48,26 @@ Fire shot can apply `burning` to the target and has `self_ignition_chance`, whic
 
 Cannon weight currently has no gameplay effect. The debug UI shows total cannon weight so we can verify ship loadouts are being read and summed correctly before weight affects sailing or cargo decisions.
 
+### Ship Types and Modifications
+
+Ship types live in [data/ships/ship_types.yaml](../data/ships/ship_types.yaml).
+
+Ship modifications live in [data/ships/ship_modifications.yaml](../data/ships/ship_modifications.yaml).
+
+The current player ship uses `brig` plus `copper_bottom`, which should make it slightly faster than a base brig. Swap to `reinforced_hull` in [data/ships/player_ship.yaml](../data/ships/player_ship.yaml) to test higher hull durability with a speed tradeoff.
+
+### Fire Severity and Magazine Explosions
+
+Fire levels live in [data/combat/status_effects.yaml](../data/combat/status_effects.yaml).
+
+Repeated fire applications escalate:
+
+```text
+small -> medium -> large
+```
+
+Round shot has a low direct magazine explosion chance. Burning ships roll an explosion chance over time based on fire severity and ship explosion multiplier.
+
 ## Editor Checks
 
 Open [game/scenes/Main.tscn](../game/scenes/Main.tscn), run the game, and try:

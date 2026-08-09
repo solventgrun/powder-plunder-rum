@@ -30,7 +30,7 @@ From this folder, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_smoke_test.ps1
 ```
 
-The smoke test loads the main scene headlessly, checks basic sailing-model assumptions, confirms the ship moves under wind, verifies YAML ship loadouts, verifies broadside side behavior, checks ammo-switch cooldown, confirms missed shots despawn with splashes, and verifies impact flashes, burning, self-ignition, sinking state, and target damage. If Godot is installed somewhere else, set `GODOT_BIN` to the Godot 4 console executable before running the script.
+The smoke test loads the main scene headlessly, checks basic sailing-model assumptions, confirms the ship moves under wind, verifies YAML ship stats/modifications and loadouts, verifies broadside side behavior, checks ammo-switch cooldown, confirms missed shots despawn with splashes, and verifies impact flashes, burning, self-ignition, magazine explosions, sinking state, and target damage. If Godot is installed somewhere else, set `GODOT_BIN` to the Godot 4 console executable before running the script.
 
 To validate YAML content data without running the full smoke test:
 

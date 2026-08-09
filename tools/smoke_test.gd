@@ -3,6 +3,7 @@ extends SceneTree
 const MAIN_SCENE_PATH := "res://game/scenes/Main.tscn"
 const SAILING_MODEL_PATH := "res://game/scripts/SailingModel.gd"
 const ContentValidator := preload("res://game/scripts/content/ContentValidator.gd")
+const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 
 
 func _initialize() -> void:
@@ -13,6 +14,7 @@ func _run() -> void:
 	var failures: Array[String] = []
 
 	_test_content_validation(failures)
+	_test_ship_stats(failures)
 	_test_sailing_model(failures)
 	await _test_main_scene_moves_ship(failures)
 	await _test_broadside_side_behavior(failures)
@@ -21,10 +23,11 @@ func _run() -> void:
 	await _test_projectile_range_splash(failures)
 	await _test_cannon_hits_target(failures)
 	await _test_fire_status_effects(failures)
+	await _test_magazine_explosion(failures)
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, sinking, and target damage.")
+		print("Smoke test passed: sailing, content, ship stats/mods, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, magazine explosion, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -64,6 +67,32 @@ func _test_sailing_model(failures: Array[String]) -> void:
 	model.free()
 
 
+func _test_ship_stats(failures: Array[String]) -> void:
+	var ship_types := ContentCatalog.load_ship_types()
+	var modifications := ContentCatalog.load_ship_modifications()
+	var player_record := ContentCatalog.load_player_ship_record()
+	var player_stats: Resource = ContentCatalog.build_ship_stats(player_record, ship_types, modifications)
+	var brig: Dictionary = ship_types.get("brig", {})
+	var brig_sailing: Dictionary = brig.get("sailing", {})
+	var brig_combat: Dictionary = brig.get("combat", {})
+	if player_stats.get("ship_type_id") != "brig":
+		failures.append("Player ship should currently use brig ship type.")
+	if not player_stats.get("modification_ids").has("copper_bottom"):
+		failures.append("Player ship should currently include copper_bottom modification.")
+	if not float(player_stats.get("max_speed")) > float(brig_sailing.get("max_speed", 0.0)):
+		failures.append("Copper bottom should increase effective max speed above base brig.")
+	if not is_equal_approx(float(player_stats.get("max_hull")), float(brig_combat.get("max_hull", 0.0))):
+		failures.append("Player hull should match base brig when reinforced_hull is not installed.")
+
+	var reinforced_record := player_record.duplicate(true)
+	reinforced_record["modifications"] = ["reinforced_hull"]
+	var reinforced_stats: Resource = ContentCatalog.build_ship_stats(reinforced_record, ship_types, modifications)
+	if not float(reinforced_stats.get("max_hull")) > float(brig_combat.get("max_hull", 0.0)):
+		failures.append("Reinforced hull should increase effective max hull.")
+	if not float(reinforced_stats.get("max_speed")) < float(brig_sailing.get("max_speed", 999.0)):
+		failures.append("Reinforced hull should reduce effective max speed.")
+
+
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	var packed := load(MAIN_SCENE_PATH)
 	if packed == null:
@@ -89,6 +118,13 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Main scene does not contain WindSystem.")
 		scene.queue_free()
 		return
+	var target := scene.get_node_or_null("TargetShip") as Node3D
+	if target == null:
+		failures.append("Main scene does not contain TargetShip.")
+		scene.queue_free()
+		return
+	if not target.scale.x < ship.scale.x:
+		failures.append("Target sloop should be visibly smaller than player brig.")
 
 	wind.set("wind_direction_degrees", 180.0)
 	var start_position := ship.global_position
@@ -352,6 +388,13 @@ func _test_fire_status_effects(failures: Array[String]) -> void:
 	await process_frame
 	if not target.get("is_burning"):
 		failures.append("Target should enter burning state from burning status effect.")
+	if target.get("burning_severity") != "small":
+		failures.append("First burning status should apply small fire severity.")
+
+	target.call("apply_status_effects", forced_burning)
+	await process_frame
+	if target.get("burning_severity") != "medium":
+		failures.append("Second burning status should escalate fire to medium severity.")
 
 	for index in range(30):
 		await process_frame
@@ -374,6 +417,32 @@ func _test_fire_status_effects(failures: Array[String]) -> void:
 	await process_frame
 	if not ship.get("is_burning"):
 		failures.append("Player ship should be able to catch fire from self ignition.")
+
+	_free_scene(scene)
+
+
+func _test_magazine_explosion(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "magazine explosion")
+	if scene == null:
+		return
+
+	var target := scene.get_node_or_null("TargetShip")
+	if target == null:
+		failures.append("Magazine explosion test could not find TargetShip.")
+		_free_scene(scene)
+		return
+
+	var forced_explosion := {
+		"magazine_explosion": {
+			"chance": 1.0
+		}
+	}
+	target.call("apply_status_effects", forced_explosion)
+	await process_frame
+	if not target.get("is_sunk"):
+		failures.append("Magazine explosion should sink/disable target immediately when forced.")
+	if not _scene_has_child_named(scene, "MagazineExplosion"):
+		failures.append("Magazine explosion should spawn primitive explosion visual.")
 
 	_free_scene(scene)
 

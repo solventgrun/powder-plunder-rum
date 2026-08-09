@@ -49,7 +49,13 @@ func _process(_delta: float) -> void:
 		if target_ship.get("is_burning"):
 			combat_text += "\nTarget: BURNING"
 
-	debug_label.text = "Speed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
+	var ship_mods := str(values.ship_mods)
+	if ship_mods.is_empty():
+		ship_mods = "None"
+
+	debug_label.text = "Ship: %s\nMods: %s\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
+		values.ship_type,
+		ship_mods,
 		values.speed,
 		values.heading,
 		values.wind_heading,

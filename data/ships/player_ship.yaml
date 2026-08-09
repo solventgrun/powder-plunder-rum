@@ -1,4 +1,7 @@
 player_ship:
+  ship_type: brig
+  modifications:
+    - copper_bottom
   broadsides:
     port:
       cannons:

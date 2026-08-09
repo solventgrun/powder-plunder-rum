@@ -1,0 +1,21 @@
+fire_levels:
+  - id: small
+    name: Small Fire
+    visual_scale: 0.75
+    hull_damage_per_second: 1.0
+    duration: 5.0
+    magazine_explosion_chance_per_second: 0.005
+
+  - id: medium
+    name: Medium Fire
+    visual_scale: 1.1
+    hull_damage_per_second: 3.0
+    duration: 6.0
+    magazine_explosion_chance_per_second: 0.02
+
+  - id: large
+    name: Large Fire
+    visual_scale: 1.55
+    hull_damage_per_second: 6.0
+    duration: 8.0
+    magazine_explosion_chance_per_second: 0.07

@@ -1,0 +1,16 @@
+ship_modifications:
+  - id: copper_bottom
+    name: Copper Bottom
+    modifiers:
+      sailing:
+        max_speed_multiplier: 1.08
+        acceleration_multiplier: 1.04
+
+  - id: reinforced_hull
+    name: Reinforced Hull
+    modifiers:
+      sailing:
+        max_speed_multiplier: 0.96
+        acceleration_multiplier: 0.96
+      combat:
+        max_hull_multiplier: 1.18
