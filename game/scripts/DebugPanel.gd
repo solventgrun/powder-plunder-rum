@@ -50,7 +50,7 @@ func _process(_delta: float) -> void:
 		var target_status := "SUNK" if target_ship.get("is_sunk") else "%.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
 		combat_text += "\nTarget Hull: %s" % target_status
 		if target_ship.get("is_burning"):
-			combat_text += "\nTarget: BURNING"
+			combat_text += "\nTarget: BURNING (%s)" % str(target_ship.get("burning_severity"))
 
 	var ship_mods := str(values.ship_mods)
 	if ship_mods.is_empty():

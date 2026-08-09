@@ -72,36 +72,38 @@ func _test_ship_stats(failures: Array[String]) -> void:
 	var modifications := ContentCatalog.load_ship_modifications()
 	var player_record := ContentCatalog.load_player_ship_record()
 	var player_stats: Resource = ContentCatalog.build_ship_stats(player_record, ship_types, modifications)
-	var brig: Dictionary = ship_types.get("brig", {})
-	var brig_sailing: Dictionary = brig.get("sailing", {})
-	var brig_combat: Dictionary = brig.get("combat", {})
-	if player_stats.get("ship_type_id") != "brig":
-		failures.append("Player ship should currently use brig ship type.")
-	if not player_stats.get("modification_ids").has("copper_bottom"):
-		failures.append("Player ship should currently include copper_bottom modification.")
-	if not float(player_stats.get("max_speed")) > float(brig_sailing.get("max_speed", 0.0)):
-		failures.append("Copper bottom should increase effective max speed above base brig.")
-	if not is_equal_approx(float(player_stats.get("max_hull")), float(brig_combat.get("max_hull", 0.0))):
-		failures.append("Player hull should match base brig when reinforced_hull is not installed.")
+	var player_ship_type_id := str(player_record.get("ship_type", ""))
+	var player_ship_type: Dictionary = ship_types.get(player_ship_type_id, {})
+	var player_sailing: Dictionary = player_ship_type.get("sailing", {})
+	var player_combat: Dictionary = player_ship_type.get("combat", {})
+	if player_stats.get("ship_type_id") != player_ship_type_id:
+		failures.append("Player ship stats should match player_ship.yaml ship_type.")
+	for modification_id in player_record.get("modifications", []):
+		if not player_stats.get("modification_ids").has(str(modification_id)):
+			failures.append("Player ship stats should include configured modification '%s'." % str(modification_id))
+	if player_stats.get("modification_ids").has("copper_bottom"):
+		if not float(player_stats.get("max_speed")) > float(player_sailing.get("max_speed", 0.0)):
+			failures.append("Copper bottom should increase effective max speed above the base player ship type.")
+	if not player_stats.get("modification_ids").has("reinforced_hull"):
+		if not is_equal_approx(float(player_stats.get("max_hull")), float(player_combat.get("max_hull", 0.0))):
+			failures.append("Player hull should match base ship hull when reinforced_hull is not installed.")
 
 	var reinforced_record := player_record.duplicate(true)
 	reinforced_record["modifications"] = ["reinforced_hull"]
 	var reinforced_stats: Resource = ContentCatalog.build_ship_stats(reinforced_record, ship_types, modifications)
-	if not float(reinforced_stats.get("max_hull")) > float(brig_combat.get("max_hull", 0.0)):
+	if not float(reinforced_stats.get("max_hull")) > float(player_combat.get("max_hull", 0.0)):
 		failures.append("Reinforced hull should increase effective max hull.")
-	if not float(reinforced_stats.get("max_speed")) < float(brig_sailing.get("max_speed", 999.0)):
+	if not float(reinforced_stats.get("max_speed")) < float(player_sailing.get("max_speed", 999.0)):
 		failures.append("Reinforced hull should reduce effective max speed.")
 
 	var target_record := ContentCatalog.load_target_ship_record()
 	var target_stats: Resource = ContentCatalog.load_target_ship_stats()
-	var sloop: Dictionary = ship_types.get("sloop", {})
-	var sloop_combat: Dictionary = sloop.get("combat", {})
-	if target_record.get("ship_type") != "sloop":
-		failures.append("Target ship should currently use sloop ship type.")
-	if target_stats.get("ship_type_id") != "sloop":
+	var target_ship_type_id := str(target_record.get("ship_type", ""))
+	if target_stats.get("ship_type_id") != target_ship_type_id:
 		failures.append("Target ship stats should load from target_ship.yaml.")
-	if not is_equal_approx(float(target_stats.get("max_hull")), float(sloop_combat.get("max_hull", 0.0))):
-		failures.append("Target hull should match configured sloop max hull.")
+	for modification_id in target_record.get("modifications", []):
+		if not target_stats.get("modification_ids").has(str(modification_id)):
+			failures.append("Target ship stats should include configured modification '%s'." % str(modification_id))
 
 
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
@@ -134,8 +136,12 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Main scene does not contain TargetShip.")
 		scene.queue_free()
 		return
-	if not target.scale.x < ship.scale.x:
-		failures.append("Target sloop should be visibly smaller than player brig.")
+	var player_stats: Resource = ContentCatalog.load_player_ship_stats()
+	var target_stats: Resource = ContentCatalog.load_target_ship_stats()
+	if not is_equal_approx(ship.scale.x, float(player_stats.get("visual_scale"))):
+		failures.append("Player ship scale should match configured ship type visual_scale.")
+	if not is_equal_approx(target.scale.x, float(target_stats.get("visual_scale"))):
+		failures.append("Target ship scale should match configured ship type visual_scale.")
 
 	wind.set("wind_direction_degrees", 180.0)
 	var start_position := ship.global_position
