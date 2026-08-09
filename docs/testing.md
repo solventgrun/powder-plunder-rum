@@ -70,6 +70,8 @@ The current target ship lives in [data/ships/target_ship.yaml](../data/ships/tar
 
 Ship speeds are intentionally tuned closer to sailing craft than speedboats. Larger ships should have more hull and worse turning, so compare a lightly loaded `sloop` against a heavily loaded `galleon` when testing handling extremes.
 
+Small targets keep their smaller visual scale, but target ships have a modest minimum cannon-hit footprint so shooting a sloop from a galleon does not feel like aiming at a sliver. Broadside shots also converge loosely toward a shared aim zone at distance; they should feel crew-aimed, not parallel spray and not sniper-precise.
+
 ### Fire Severity and Magazine Explosions
 
 Fire levels live in [data/combat/status_effects.yaml](../data/combat/status_effects.yaml).

@@ -7,7 +7,9 @@ const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 @export var projectile_scene: PackedScene
 @export var default_ammo_id: String = "round"
 @export_range(0.1, 3.0, 0.05) var muzzle_spacing: float = 0.75
-@export_range(0.0, 15.0, 0.5, "degrees") var spread_degrees: float = 4.0
+@export_range(0.0, 15.0, 0.5, "degrees") var spread_degrees: float = 2.0
+@export_range(10.0, 120.0, 1.0) var convergence_distance: float = 55.0
+@export_range(0.0, 1.0, 0.05) var convergence_strength: float = 0.75
 
 var cannon_types: Dictionary = {}
 var ammo_types: Dictionary = {}
@@ -121,8 +123,8 @@ func _fire_side(side: int) -> bool:
 			projectile.queue_free()
 			continue
 
-		var basis := parent_3d.global_transform.basis
-		var direction := (basis.x * side).normalized()
+		var muzzle_position := _get_muzzle_global_position(parent_3d, side, index, side_cannons.size())
+		var direction := _get_converged_fire_direction(parent_3d, muzzle_position, side)
 		var yaw := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
 		direction = direction.rotated(Vector3.UP, yaw).normalized()
 
@@ -130,7 +132,7 @@ func _fire_side(side: int) -> bool:
 		if spawn_parent == null:
 			spawn_parent = parent_3d.get_parent()
 		spawn_parent.add_child(projectile_3d)
-		projectile_3d.global_position = _get_muzzle_global_position(parent_3d, side, index, side_cannons.size())
+		projectile_3d.global_position = muzzle_position
 		projectile_3d.call("configure", direction, cannon, ammo, parent_3d)
 		_spawn_muzzle_flash(spawn_parent, projectile_3d.global_position)
 		fired_any = true
@@ -180,6 +182,14 @@ func _get_muzzle_global_position(parent_3d: Node3D, side: int, index: int, canno
 	var center_offset := float(index) - float(cannon_count - 1) * 0.5
 	var local_offset := Vector3(side * 1.05, 0.45, center_offset * muzzle_spacing)
 	return parent_3d.to_global(local_offset)
+
+
+func _get_converged_fire_direction(parent_3d: Node3D, muzzle_position: Vector3, side: int) -> Vector3:
+	var basis := parent_3d.global_transform.basis
+	var broadside_direction := (basis.x * side).normalized()
+	var aim_point := parent_3d.global_position + broadside_direction * convergence_distance
+	var converged_direction := (aim_point - muzzle_position).normalized()
+	return broadside_direction.lerp(converged_direction, convergence_strength).normalized()
 
 
 func _get_ammo_type() -> Resource:

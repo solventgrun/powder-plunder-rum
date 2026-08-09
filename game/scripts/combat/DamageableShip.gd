@@ -9,6 +9,7 @@ const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tsc
 @export var ship_type_id: String = "sloop"
 @export var sunk_drop: float = 0.55
 @export var sunk_roll_degrees: float = 11.0
+@export var minimum_cannon_hit_scale: float = 1.12
 
 var hull: float = 60.0
 var ship_display_name: String = "Target Ship"
@@ -138,7 +139,20 @@ func _apply_ship_type() -> void:
 	modification_names = stats.get("modification_names")
 	max_hull = float(stats.get("max_hull"))
 	magazine_explosion_multiplier = float(stats.get("magazine_explosion_multiplier"))
-	scale = Vector3.ONE * float(stats.get("visual_scale"))
+	var visual_scale := float(stats.get("visual_scale"))
+	scale = Vector3.ONE * visual_scale
+	_apply_cannon_hit_forgiveness(visual_scale)
+
+
+func _apply_cannon_hit_forgiveness(visual_scale: float) -> void:
+	var collision := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collision == null:
+		return
+	if visual_scale >= minimum_cannon_hit_scale:
+		collision.scale = Vector3.ONE
+		return
+	var forgiveness_scale := minimum_cannon_hit_scale / maxf(visual_scale, 0.01)
+	collision.scale = Vector3.ONE * forgiveness_scale
 
 
 func _escalate_fire_severity(incoming_severity: String) -> String:

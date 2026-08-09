@@ -180,6 +180,11 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Player ship scale should match configured ship type visual_scale.")
 	if not is_equal_approx(target.scale.x, float(target_stats.get("visual_scale"))):
 		failures.append("Target ship scale should match configured ship type visual_scale.")
+	var target_collision := target.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if target_collision and target.scale.x < float(target.get("minimum_cannon_hit_scale")):
+		var hitbox_world_scale := target_collision.global_transform.basis.get_scale().x
+		if not hitbox_world_scale > target.scale.x:
+			failures.append("Small target ships should have a modest cannon-hit forgiveness collider.")
 	var player_hull := ship.get_node_or_null("Hull") as MeshInstance3D
 	var target_hull := target.get_node_or_null("Hull") as MeshInstance3D
 	var player_bow := ship.get_node_or_null("Bow") as MeshInstance3D
@@ -395,6 +400,16 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 	var unscaled_offset := Vector3(1.05, 0.45, 0.0).length()
 	if not scaled_offset < unscaled_offset:
 		failures.append("Muzzle positions should respect ship visual scale so sloop cannon shots stay attached to the hull.")
+
+	ship.scale = Vector3.ONE * 1.65
+	var first_muzzle: Vector3 = broadside.call("_get_muzzle_global_position", ship, 1, 0, 7)
+	var last_muzzle: Vector3 = broadside.call("_get_muzzle_global_position", ship, 1, 6, 7)
+	var first_direction: Vector3 = broadside.call("_get_converged_fire_direction", ship, first_muzzle, 1)
+	var last_direction: Vector3 = broadside.call("_get_converged_fire_direction", ship, last_muzzle, 1)
+	if not first_direction.z > 0.0 or not last_direction.z < 0.0:
+		failures.append("Fore and aft guns should converge toward a shared broadside aim zone.")
+	if first_direction.dot(Vector3.RIGHT) < 0.98 or last_direction.dot(Vector3.RIGHT) < 0.98:
+		failures.append("Broadside convergence should stay limited and not turn cannons into sniper fire.")
 
 	_free_scene(scene)
 

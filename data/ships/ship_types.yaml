@@ -1,7 +1,7 @@
 ship_types:
   - id: sloop
     name: Sloop
-    visual_scale: 0.9
+    visual_scale: 1.0
     sailing:
       max_speed: 6.2
       acceleration: 2.7
@@ -15,7 +15,7 @@ ship_types:
 
   - id: brig
     name: Brigantine
-    visual_scale: 1.0
+    visual_scale: 1.12
     sailing:
       max_speed: 5.3
       acceleration: 2.1
