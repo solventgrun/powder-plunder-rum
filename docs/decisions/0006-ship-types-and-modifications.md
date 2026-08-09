@@ -18,8 +18,8 @@ Ship types provide base stats:
 - max hull
 - primitive visual scale
 - magazine explosion multiplier
-- max cannons per side
-- cannon weight capacity
+- usable load capacity
+- total gun ports, split evenly between port and starboard
 
 Ship modifications layer multipliers on top of the base ship type. The initial modifications are:
 
@@ -38,8 +38,10 @@ A full inventory and upgrade system would be more complete, but it is premature 
 
 The prototype can now test whether ship identity matters while keeping the implementation simple. Enemy ships can reuse these profiles without new hardcoded stats.
 
-Cannon weight and capacity are validated/displayed but do not affect sailing yet. That keeps the tradeoff visible without forcing balance decisions too early.
+Cannon weight, cargo weight, usable load capacity, and gun ports are now gameplay constraints. Ships may carry more cannons than they can fire, but only cannons fitting available side gun ports fire in a broadside. Total carried cannon weight plus cargo weight may not exceed usable load capacity.
+
+Load percentage modifies sailing. Light ships at or below 60% capacity get a small speed/handling bonus, ships near 80% capacity are penalized, and ships near 90% capacity are heavily penalized. This supports meaningful choices: a small ship can mount heavy guns, but doing so consumes cargo capacity and dulls the handling that made the ship attractive.
 
 ## Follow-Up
 
-When enemy AI exists, decide whether enemy combat loadouts also belong in YAML ship config files or in encounter definitions. Revisit whether cannon weight should affect speed, acceleration, or cargo capacity.
+When enemy AI exists, decide whether enemy combat loadouts also belong in YAML ship config files or in encounter definitions. Revisit the exact load penalty curve after more playtesting.

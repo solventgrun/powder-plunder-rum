@@ -31,10 +31,11 @@ func _process(_delta: float) -> void:
 	var combat_text := ""
 	if broadside_controller:
 		var combat: Dictionary = broadside_controller.call("get_debug_values")
-		combat_text = "\nAmmo: %s\nPort: %s\nStarboard: %s\nPort Reload: %.1fs\nStarboard Reload: %.1fs\nCannon Weight: %.0f" % [
+		combat_text = "\nAmmo: %s\nPort: %s\nStarboard: %s\nGun Ports: %d/side\nPort Reload: %.1fs\nStarboard Reload: %.1fs\nCannon Weight: %.0f" % [
 			combat.ammo_name,
 			combat.port_label,
 			combat.starboard_label,
+			combat.gun_ports_per_side,
 			combat.port_cooldown,
 			combat.starboard_cooldown,
 			combat.total_weight
@@ -55,10 +56,16 @@ func _process(_delta: float) -> void:
 	var ship_mods := str(values.ship_mods)
 	if ship_mods.is_empty():
 		ship_mods = "None"
+	var load_percent := float(values.load_fraction) * 100.0
 
-	debug_label.text = "Ship: %s\nMods: %s\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
+	debug_label.text = "Ship: %s\nMods: %s\nLoad: %.0f / %.0f (%.0f%%)\nLoad Move: %.2fx speed, %.2fx turn\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
 		values.ship_type,
 		ship_mods,
+		values.load_weight,
+		values.load_capacity,
+		load_percent,
+		values.load_speed_multiplier,
+		values.load_turn_multiplier,
 		values.speed,
 		values.heading,
 		values.wind_heading,

@@ -44,9 +44,19 @@ Current intent:
 
 Fire shot can apply `burning` to the target and has `self_ignition_chance`, which can set the firing ship on fire. This is intentionally reckless and should remain easy to tune.
 
-### Cannon Weight Visibility
+### Load Capacity and Gun Ports
 
-Cannon weight currently has no gameplay effect. The debug UI shows total cannon weight so we can verify ship loadouts are being read and summed correctly before weight affects sailing or cargo decisions.
+Cannon weight lives in [data/cannons/cannon_types.yaml](../data/cannons/cannon_types.yaml). Ship usable load capacity and gun ports live in [data/ships/ship_types.yaml](../data/ships/ship_types.yaml).
+
+The player ship can also define `cargo_weight` in [data/ships/player_ship.yaml](../data/ships/player_ship.yaml). Cannon weight plus cargo weight may not exceed the ship's usable load capacity. Extra cannons may be carried beyond available gun ports, but only cannons that fit the side's gun ports can fire.
+
+Load affects sailing:
+
+- `<= 60%`: lightly loaded, small speed and handling boost
+- around `80%`: heavy, noticeable speed and handling penalty
+- `>= 90%`: overloaded, significant speed and handling penalty
+
+The debug UI shows load weight/capacity, load movement multipliers, gun ports per side, and cannon weight so YAML tuning is visible immediately.
 
 ### Ship Types and Modifications
 
@@ -58,7 +68,7 @@ The current player ship uses `brig` plus `copper_bottom`, which should make it s
 
 The current target ship lives in [data/ships/target_ship.yaml](../data/ships/target_ship.yaml). Change its `ship_type` between `sloop`, `brig`, `frigate`, and `galleon` to test target size, hull durability, and magazine explosion risk. Add modifications there to verify target-side stat layering without changing the player ship.
 
-Ship speeds are intentionally tuned closer to sailing craft than speedboats. Larger ships should have more hull and worse turning, so compare a `sloop` against a `galleon` when testing handling extremes.
+Ship speeds are intentionally tuned closer to sailing craft than speedboats. Larger ships should have more hull and worse turning, so compare a lightly loaded `sloop` against a heavily loaded `galleon` when testing handling extremes.
 
 ### Fire Severity and Magazine Explosions
 

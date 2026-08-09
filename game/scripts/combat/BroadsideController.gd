@@ -12,6 +12,7 @@ const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 var cannon_types: Dictionary = {}
 var ammo_types: Dictionary = {}
 var ship_loadout: Dictionary = {}
+var ship_stats: Resource
 var ammo_order: Array[String] = ["round", "chain", "grape", "fire"]
 var selected_ammo_id: String = "round"
 var port_cooldown: float = 0.0
@@ -22,6 +23,7 @@ func _ready() -> void:
 	cannon_types = ContentCatalog.load_cannon_types()
 	ammo_types = ContentCatalog.load_ammo_types()
 	ship_loadout = ContentCatalog.load_player_ship_loadout()
+	ship_stats = ContentCatalog.load_player_ship_stats()
 	selected_ammo_id = default_ammo_id
 	if not ammo_types.has(selected_ammo_id) and not ammo_types.is_empty():
 		selected_ammo_id = ammo_types.keys()[0]
@@ -75,8 +77,11 @@ func get_debug_values() -> Dictionary:
 		"ammo_name": ammo.get("display_name") if ammo else "No Ammo",
 		"port_cooldown": port_cooldown,
 		"starboard_cooldown": starboard_cooldown,
-		"port_count": _get_side_cannons(-1).size(),
-		"starboard_count": _get_side_cannons(1).size(),
+		"port_count": _get_side_firing_cannons(-1).size(),
+		"starboard_count": _get_side_firing_cannons(1).size(),
+		"port_carried_count": _get_side_cannons(-1).size(),
+		"starboard_carried_count": _get_side_cannons(1).size(),
+		"gun_ports_per_side": _get_gun_ports_per_side(),
 		"port_weight": _get_side_weight(-1),
 		"starboard_weight": _get_side_weight(1),
 		"total_weight": get_total_cannon_weight(),
@@ -97,7 +102,7 @@ func _fire_side(side: int) -> bool:
 	if side > 0 and starboard_cooldown > 0.0:
 		return false
 
-	var side_cannons := _get_side_cannons(side)
+	var side_cannons := _get_side_firing_cannons(side)
 	if side_cannons.is_empty():
 		return false
 
@@ -190,6 +195,12 @@ func _get_side_cannons(side: int) -> Array[Resource]:
 	return cannons
 
 
+func _get_side_firing_cannons(side: int) -> Array[Resource]:
+	var cannons := _get_side_cannons(side)
+	var port_limit := _get_gun_ports_per_side()
+	return cannons.slice(0, mini(cannons.size(), port_limit))
+
+
 func _get_side_cannon_ids(side: int) -> Array:
 	var side_name := "port" if side < 0 else "starboard"
 	var broadsides: Dictionary = ship_loadout.get("broadsides", {})
@@ -199,7 +210,7 @@ func _get_side_cannon_ids(side: int) -> Array:
 
 func _get_side_reload_time(side: int) -> float:
 	var reload_time := 0.0
-	for cannon in _get_side_cannons(side):
+	for cannon in _get_side_firing_cannons(side):
 		reload_time = maxf(reload_time, float(cannon.get("reload_time")))
 	return reload_time
 
@@ -217,7 +228,7 @@ func get_total_cannon_weight() -> float:
 
 func _get_side_max_range(side: int) -> float:
 	var range := 0.0
-	for cannon in _get_side_cannons(side):
+	for cannon in _get_side_firing_cannons(side):
 		range = maxf(range, float(cannon.get("range")))
 	var ammo := _get_ammo_type()
 	if ammo == null:
@@ -227,11 +238,22 @@ func _get_side_max_range(side: int) -> float:
 
 func _get_side_label(side: int) -> String:
 	var counts := {}
-	for cannon in _get_side_cannons(side):
+	for cannon in _get_side_firing_cannons(side):
 		var name := str(cannon.get("display_name"))
 		counts[name] = int(counts.get(name, 0)) + 1
 
 	var parts: Array[String] = []
 	for name in counts.keys():
 		parts.append("%dx %s" % [counts[name], name])
-	return ", ".join(parts)
+	var label := ", ".join(parts)
+	var carried_count := _get_side_cannons(side).size()
+	var firing_count := _get_side_firing_cannons(side).size()
+	if carried_count > firing_count:
+		label += " (+%d stowed)" % [carried_count - firing_count]
+	return label
+
+
+func _get_gun_ports_per_side() -> int:
+	if ship_stats:
+		return int(ship_stats.get("gun_ports_per_side"))
+	return 999

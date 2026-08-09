@@ -81,7 +81,12 @@ func get_debug_values() -> Dictionary:
 		"sail_trim": sail_trim,
 		"ship_type": ship_stats.get("display_name") if ship_stats else ship_type_id,
 		"ship_mods": ", ".join(ship_stats.get("modification_names")) if ship_stats else "",
-		"max_hull": max_hull
+		"max_hull": max_hull,
+		"load_weight": float(ship_stats.get("total_load_weight")) if ship_stats else 0.0,
+		"load_capacity": float(ship_stats.get("usable_load_capacity")) if ship_stats else 0.0,
+		"load_fraction": float(ship_stats.get("load_fraction")) if ship_stats else 0.0,
+		"load_speed_multiplier": float(ship_stats.get("load_speed_multiplier")) if ship_stats else 1.0,
+		"load_turn_multiplier": float(ship_stats.get("load_turn_multiplier")) if ship_stats else 1.0
 	}
 
 

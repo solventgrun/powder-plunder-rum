@@ -110,8 +110,10 @@ static func build_ship_stats(ship_record: Dictionary, ship_types: Dictionary, sh
 	stats.set("turn_rate", float(sailing.get("turn_rate", 70.0)))
 	stats.set("max_hull", float(combat.get("max_hull", 80.0)))
 	stats.set("magazine_explosion_multiplier", float(combat.get("magazine_explosion_multiplier", 1.0)))
-	stats.set("max_cannons_per_side", int(combat.get("max_cannons_per_side", 5)))
-	stats.set("cannon_weight_capacity", float(combat.get("cannon_weight_capacity", 6500.0)))
+	stats.set("usable_load_capacity", float(combat.get("usable_load_capacity", 90.0)))
+	stats.set("gun_ports", int(combat.get("gun_ports", 14)))
+	stats.set("gun_ports_per_side", int(floor(float(combat.get("gun_ports", 14)) / 2.0)))
+	stats.set("cargo_weight", float(ship_record.get("cargo_weight", 0.0)))
 
 	var modification_ids: Array[String] = []
 	var modification_names: Array[String] = []
@@ -126,6 +128,7 @@ static func build_ship_stats(ship_record: Dictionary, ship_types: Dictionary, sh
 
 	stats.set("modification_ids", modification_ids)
 	stats.set("modification_names", modification_names)
+	_apply_load_adjustment(stats, ship_record)
 	return stats
 
 
@@ -166,6 +169,61 @@ static func _apply_ship_modification(stats: Resource, modification: Dictionary) 
 		stats.set("max_hull", float(stats.get("max_hull")) * float(combat.get("max_hull_multiplier")))
 	if combat.has("magazine_explosion_multiplier"):
 		stats.set("magazine_explosion_multiplier", float(stats.get("magazine_explosion_multiplier")) * float(combat.get("magazine_explosion_multiplier")))
+
+
+static func _apply_load_adjustment(stats: Resource, ship_record: Dictionary) -> void:
+	var capacity := float(stats.get("usable_load_capacity"))
+	var cannon_weight := calculate_cannon_weight(ship_record, load_cannon_types())
+	var cargo_weight := float(ship_record.get("cargo_weight", 0.0))
+	var total_weight := cannon_weight + cargo_weight
+	var load_fraction := 0.0
+	if capacity > 0.0:
+		load_fraction = total_weight / capacity
+
+	var speed_multiplier := _calculate_load_speed_multiplier(load_fraction)
+	var turn_multiplier := _calculate_load_turn_multiplier(load_fraction)
+
+	stats.set("cargo_weight", cargo_weight)
+	stats.set("cannon_weight", cannon_weight)
+	stats.set("total_load_weight", total_weight)
+	stats.set("load_fraction", load_fraction)
+	stats.set("load_speed_multiplier", speed_multiplier)
+	stats.set("load_turn_multiplier", turn_multiplier)
+	stats.set("max_speed", float(stats.get("max_speed")) * speed_multiplier)
+	stats.set("acceleration", float(stats.get("acceleration")) * speed_multiplier)
+	stats.set("deceleration", float(stats.get("deceleration")) * turn_multiplier)
+	stats.set("turn_rate", float(stats.get("turn_rate")) * turn_multiplier)
+
+
+static func calculate_cannon_weight(ship_record: Dictionary, cannon_types: Dictionary) -> float:
+	var weight := 0.0
+	var broadsides: Dictionary = ship_record.get("broadsides", {})
+	for side in ["port", "starboard"]:
+		var broadside: Dictionary = broadsides.get(side, {})
+		for cannon_id in broadside.get("cannons", []):
+			if cannon_types.has(str(cannon_id)):
+				weight += float(cannon_types[str(cannon_id)].get("weight"))
+	return weight
+
+
+static func _calculate_load_speed_multiplier(load_fraction: float) -> float:
+	if load_fraction <= 0.6:
+		return 1.05
+	if load_fraction <= 0.8:
+		return lerpf(1.05, 0.9, inverse_lerp(0.6, 0.8, load_fraction))
+	if load_fraction <= 0.9:
+		return lerpf(0.9, 0.72, inverse_lerp(0.8, 0.9, load_fraction))
+	return 0.62
+
+
+static func _calculate_load_turn_multiplier(load_fraction: float) -> float:
+	if load_fraction <= 0.6:
+		return 1.05
+	if load_fraction <= 0.8:
+		return lerpf(1.05, 0.88, inverse_lerp(0.6, 0.8, load_fraction))
+	if load_fraction <= 0.9:
+		return lerpf(0.88, 0.68, inverse_lerp(0.8, 0.9, load_fraction))
+	return 0.55
 
 
 static func _load_yaml_records(path: String, root_key: String) -> Array[Dictionary]:
@@ -225,6 +283,7 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 
 	var root: Dictionary = {
 		"ship_type": "",
+		"cargo_weight": 0.0,
 		"modifications": [],
 		"broadsides": {
 			"port": {"cannons": []},
@@ -260,6 +319,10 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 			root["ship_type"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
 			in_cannons = false
+		elif line.begins_with("cargo_weight:"):
+			root["cargo_weight"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
 		elif line == "modifications:":
 			in_modifications = true
 			in_cannons = false
@@ -283,6 +346,7 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 
 	var root: Dictionary = {
 		"ship_type": "",
+		"cargo_weight": 0.0,
 		"modifications": []
 	}
 	var in_root := false
@@ -304,6 +368,9 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 
 		if line.begins_with("ship_type:"):
 			root["ship_type"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+		elif line.begins_with("cargo_weight:"):
+			root["cargo_weight"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
 		elif line == "modifications:":
 			in_modifications = true

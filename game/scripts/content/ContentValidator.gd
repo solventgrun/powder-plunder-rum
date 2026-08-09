@@ -8,19 +8,18 @@ const AMMO_FIELDS := ["id", "name", "range_multiplier", "damage", "status_effect
 const AMMO_DAMAGE_FIELDS := ["hull", "sail", "crew", "morale"]
 const STATUS_EFFECT_FIELDS := ["severity", "chance", "self_ignition_chance", "duration", "hull_damage_per_second"]
 const SHIP_FIELDS := ["broadsides"]
-const PLAYER_SHIP_FIELDS := ["ship_type", "modifications", "broadsides"]
-const TARGET_SHIP_FIELDS := ["ship_type", "modifications"]
+const PLAYER_SHIP_FIELDS := ["ship_type", "cargo_weight", "modifications", "broadsides"]
+const TARGET_SHIP_FIELDS := ["ship_type", "cargo_weight", "modifications"]
 const BROADSIDES_FIELDS := ["port", "starboard"]
 const BROADSIDE_FIELDS := ["cannons"]
 const SHIP_TYPE_FIELDS := ["id", "name", "visual_scale", "sailing", "combat"]
 const SHIP_SAILING_FIELDS := ["max_speed", "acceleration", "deceleration", "turn_rate"]
-const SHIP_COMBAT_FIELDS := ["max_hull", "magazine_explosion_multiplier", "max_cannons_per_side", "cannon_weight_capacity"]
+const SHIP_COMBAT_FIELDS := ["max_hull", "magazine_explosion_multiplier", "usable_load_capacity", "gun_ports"]
 const SHIP_MODIFICATION_FIELDS := ["id", "name", "modifiers"]
 const SHIP_MODIFIERS_FIELDS := ["sailing", "combat"]
 const SHIP_MODIFIER_SAILING_FIELDS := ["max_speed_multiplier", "acceleration_multiplier", "deceleration_multiplier", "turn_rate_multiplier"]
 const SHIP_MODIFIER_COMBAT_FIELDS := ["max_hull_multiplier", "magazine_explosion_multiplier"]
 const FIRE_LEVEL_FIELDS := ["id", "name", "visual_scale", "hull_damage_per_second", "duration", "growth_chance_per_second", "magazine_explosion_chance_per_second"]
-const PROTOTYPE_BROADSIDE_LIMIT := 3
 
 
 static func validate_all() -> Dictionary:
@@ -104,6 +103,8 @@ static func validate_ship_types(records: Array[Dictionary], errors: Array[String
 		var combat: Dictionary = record.get("combat", {})
 		for field in SHIP_COMBAT_FIELDS:
 			_validate_positive_number("%s combat" % label, combat, field, errors)
+		if combat.has("gun_ports") and int(combat.get("gun_ports")) % 2 != 0:
+			errors.append("%s combat gun_ports must be an even number so ports split evenly per side." % label)
 
 
 static func validate_ship_modifications(records: Array[Dictionary], errors: Array[String], warnings: Array[String]) -> void:
@@ -152,6 +153,7 @@ static func validate_player_ship(record: Dictionary, cannon_types: Dictionary, s
 
 	_warn_unknown_fields("player_ship", record, PLAYER_SHIP_FIELDS, warnings)
 	_validate_required_fields("player_ship", record, ["ship_type", "broadsides"], errors)
+	_validate_non_negative_number("player_ship", record, "cargo_weight", errors)
 	var ship_type_id := str(record.get("ship_type", ""))
 	_validate_id("player_ship ship_type", ship_type_id, errors)
 	if not ship_type_id.is_empty() and not ship_types.has(ship_type_id):
@@ -187,26 +189,26 @@ static func validate_player_ship(record: Dictionary, cannon_types: Dictionary, s
 		var cannons: Array = broadside.get("cannons")
 		if cannons.is_empty():
 			errors.append("%s cannons must contain at least one cannon id." % label)
-		if cannons.size() > PROTOTYPE_BROADSIDE_LIMIT:
-			warnings.append("%s has %d cannons. Prototype player ship is currently tuned for %d per side." % [label, cannons.size(), PROTOTYPE_BROADSIDE_LIMIT])
 		if ship_types.has(ship_type_id):
 			var ship_type: Dictionary = ship_types[ship_type_id]
 			var combat: Dictionary = ship_type.get("combat", {})
-			var max_cannons := int(combat.get("max_cannons_per_side", 999))
-			if cannons.size() > max_cannons:
-				warnings.append("%s has %d cannons, above %s max_cannons_per_side of %d." % [label, cannons.size(), ship_type_id, max_cannons])
-			var weight := 0.0
-			for cannon_id in cannons:
-				if cannon_types.has(str(cannon_id)):
-					weight += float(cannon_types[str(cannon_id)].get("weight"))
-			var capacity := float(combat.get("cannon_weight_capacity", 999999.0))
-			if weight > capacity:
-				warnings.append("%s cannon weight %.0f exceeds %s capacity %.0f." % [label, weight, ship_type_id, capacity])
+			var gun_ports_per_side := int(floori(int(combat.get("gun_ports", 999)) / 2))
+			if cannons.size() > gun_ports_per_side:
+				warnings.append("%s carries %d cannons but only %d gun ports can fire on that side." % [label, cannons.size(), gun_ports_per_side])
 		for cannon_id in cannons:
 			var id := str(cannon_id)
 			_validate_id("%s cannon id" % label, id, errors)
 			if not cannon_types.has(id):
 				errors.append("%s references unknown cannon id '%s'." % [label, id])
+	if ship_types.has(ship_type_id):
+		var ship_type: Dictionary = ship_types[ship_type_id]
+		var combat: Dictionary = ship_type.get("combat", {})
+		var capacity := float(combat.get("usable_load_capacity", 999999.0))
+		var cannon_weight := ContentCatalog.calculate_cannon_weight(record, cannon_types)
+		var cargo_weight := float(record.get("cargo_weight", 0.0))
+		var total_load := cannon_weight + cargo_weight
+		if total_load > capacity:
+			errors.append("player_ship total load %.1f exceeds %s usable_load_capacity %.1f." % [total_load, ship_type_id, capacity])
 
 
 static func validate_target_ship(record: Dictionary, ship_types: Dictionary, ship_modifications: Dictionary, errors: Array[String], warnings: Array[String]) -> void:
@@ -216,7 +218,16 @@ static func validate_target_ship(record: Dictionary, ship_types: Dictionary, shi
 
 	_warn_unknown_fields("target_ship", record, TARGET_SHIP_FIELDS, warnings)
 	_validate_required_fields("target_ship", record, ["ship_type"], errors)
+	_validate_non_negative_number("target_ship", record, "cargo_weight", errors)
 	_validate_ship_type_and_modifications("target_ship", record, ship_types, ship_modifications, errors)
+	var ship_type_id := str(record.get("ship_type", ""))
+	if ship_types.has(ship_type_id):
+		var ship_type: Dictionary = ship_types[ship_type_id]
+		var combat: Dictionary = ship_type.get("combat", {})
+		var capacity := float(combat.get("usable_load_capacity", 999999.0))
+		var cargo_weight := float(record.get("cargo_weight", 0.0))
+		if cargo_weight > capacity:
+			errors.append("target_ship cargo_weight %.1f exceeds %s usable_load_capacity %.1f." % [cargo_weight, ship_type_id, capacity])
 
 
 static func _validate_ship_type_and_modifications(label: String, record: Dictionary, ship_types: Dictionary, ship_modifications: Dictionary, errors: Array[String]) -> void:

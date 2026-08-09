@@ -4,7 +4,7 @@ cannon_types:
     type: naval
     range: 52
     reload_time: 1.4
-    weight: 600
+    weight: 4
     projectile_speed: 16
 
   - id: long_9_pounder
@@ -12,7 +12,7 @@ cannon_types:
     type: naval
     range: 76
     reload_time: 2.2
-    weight: 1350
+    weight: 7
     projectile_speed: 22
 
   - id: long_12_pounder
@@ -20,5 +20,5 @@ cannon_types:
     type: naval
     range: 96
     reload_time: 2.8
-    weight: 1800
+    weight: 10
     projectile_speed: 26

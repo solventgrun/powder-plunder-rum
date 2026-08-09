@@ -72,28 +72,29 @@ func _test_ship_stats(failures: Array[String]) -> void:
 	var modifications := ContentCatalog.load_ship_modifications()
 	var player_record := ContentCatalog.load_player_ship_record()
 	var player_stats: Resource = ContentCatalog.build_ship_stats(player_record, ship_types, modifications)
+	var base_record := player_record.duplicate(true)
+	base_record["modifications"] = []
+	var base_stats: Resource = ContentCatalog.build_ship_stats(base_record, ship_types, modifications)
 	var player_ship_type_id := str(player_record.get("ship_type", ""))
 	var player_ship_type: Dictionary = ship_types.get(player_ship_type_id, {})
-	var player_sailing: Dictionary = player_ship_type.get("sailing", {})
-	var player_combat: Dictionary = player_ship_type.get("combat", {})
 	if player_stats.get("ship_type_id") != player_ship_type_id:
 		failures.append("Player ship stats should match player_ship.yaml ship_type.")
 	for modification_id in player_record.get("modifications", []):
 		if not player_stats.get("modification_ids").has(str(modification_id)):
 			failures.append("Player ship stats should include configured modification '%s'." % str(modification_id))
 	if player_stats.get("modification_ids").has("copper_bottom"):
-		if not float(player_stats.get("max_speed")) > float(player_sailing.get("max_speed", 0.0)):
-			failures.append("Copper bottom should increase effective max speed above the base player ship type.")
+		if not float(player_stats.get("max_speed")) > float(base_stats.get("max_speed")):
+			failures.append("Copper bottom should increase effective max speed above the same loaded ship without mods.")
 	if not player_stats.get("modification_ids").has("reinforced_hull"):
-		if not is_equal_approx(float(player_stats.get("max_hull")), float(player_combat.get("max_hull", 0.0))):
-			failures.append("Player hull should match base ship hull when reinforced_hull is not installed.")
+		if not is_equal_approx(float(player_stats.get("max_hull")), float(base_stats.get("max_hull"))):
+			failures.append("Player hull should match same loaded ship hull when reinforced_hull is not installed.")
 
 	var reinforced_record := player_record.duplicate(true)
 	reinforced_record["modifications"] = ["reinforced_hull"]
 	var reinforced_stats: Resource = ContentCatalog.build_ship_stats(reinforced_record, ship_types, modifications)
-	if not float(reinforced_stats.get("max_hull")) > float(player_combat.get("max_hull", 0.0)):
+	if not float(reinforced_stats.get("max_hull")) > float(base_stats.get("max_hull")):
 		failures.append("Reinforced hull should increase effective max hull.")
-	if not float(reinforced_stats.get("max_speed")) < float(player_sailing.get("max_speed", 999.0)):
+	if not float(reinforced_stats.get("max_speed")) < float(base_stats.get("max_speed")):
 		failures.append("Reinforced hull should reduce effective max speed.")
 
 	var target_record := ContentCatalog.load_target_ship_record()
@@ -117,6 +118,29 @@ func _test_ship_stats(failures: Array[String]) -> void:
 		failures.append("Sloops should turn better than galleons.")
 	if not float(galleon_combat.get("max_hull", 0.0)) > float(sloop_combat.get("max_hull", 999.0)):
 		failures.append("Galleons should have more hull than sloops.")
+
+	var light_record := {
+		"ship_type": "sloop",
+		"cargo_weight": 0.0,
+		"modifications": [],
+		"broadsides": {
+			"port": {"cannons": ["light_4_pounder"]},
+			"starboard": {"cannons": ["light_4_pounder"]}
+		}
+	}
+	var heavy_record := light_record.duplicate(true)
+	heavy_record["cargo_weight"] = 24.0
+	var overloaded_record := light_record.duplicate(true)
+	overloaded_record["cargo_weight"] = 28.0
+	var light_stats: Resource = ContentCatalog.build_ship_stats(light_record, ship_types, modifications)
+	var heavy_stats: Resource = ContentCatalog.build_ship_stats(heavy_record, ship_types, modifications)
+	var overloaded_stats: Resource = ContentCatalog.build_ship_stats(overloaded_record, ship_types, modifications)
+	if not float(light_stats.get("load_speed_multiplier")) > 1.0:
+		failures.append("Ships at 60% load or less should receive a small speed boost.")
+	if not float(heavy_stats.get("load_speed_multiplier")) < 1.0:
+		failures.append("Ships around 80% load should receive a speed penalty.")
+	if not float(overloaded_stats.get("load_speed_multiplier")) < float(heavy_stats.get("load_speed_multiplier")):
+		failures.append("Ships around 90% load should be significantly slower than heavy ships.")
 
 
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
@@ -312,6 +336,35 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 	var total_weight: float = broadside.call("get_total_cannon_weight")
 	if not is_equal_approx(total_weight, port_weight + starboard_weight):
 		failures.append("Total cannon weight should equal port plus starboard cannon weight.")
+
+	var sloop_stats: Resource = ContentCatalog.build_ship_stats({
+		"ship_type": "sloop",
+		"cargo_weight": 0.0,
+		"modifications": [],
+		"broadsides": {}
+	}, ContentCatalog.load_ship_types(), ContentCatalog.load_ship_modifications())
+	broadside.set("ship_stats", sloop_stats)
+	broadside.set("ship_loadout", {
+		"broadsides": {
+			"port": {
+				"cannons": [
+					"light_4_pounder",
+					"light_4_pounder",
+					"light_4_pounder",
+					"light_4_pounder",
+					"long_12_pounder",
+					"long_12_pounder"
+				]
+			},
+			"starboard": {"cannons": []}
+		}
+	})
+	var carried_port_cannons: Array = broadside.call("_get_side_cannons", -1)
+	var firing_port_cannons: Array = broadside.call("_get_side_firing_cannons", -1)
+	if carried_port_cannons.size() != 6:
+		failures.append("Broadside loadout should be allowed to carry cannons beyond available gun ports.")
+	if firing_port_cannons.size() != 4:
+		failures.append("Sloop should only fire 4 cannons per side through its gun ports.")
 
 	_free_scene(scene)
 
