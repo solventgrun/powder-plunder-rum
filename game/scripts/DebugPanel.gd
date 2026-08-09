@@ -44,6 +44,9 @@ func _process(_delta: float) -> void:
 		if ship.get("is_burning"):
 			combat_text += "\nPlayer: BURNING"
 	if target_ship:
+		var target_name := str(target_ship.get("ship_display_name"))
+		if not target_name.is_empty():
+			combat_text += "\nTarget: %s" % target_name
 		var target_status := "SUNK" if target_ship.get("is_sunk") else "%.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
 		combat_text += "\nTarget Hull: %s" % target_status
 		if target_ship.get("is_burning"):

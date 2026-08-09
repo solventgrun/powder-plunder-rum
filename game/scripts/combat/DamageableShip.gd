@@ -11,6 +11,8 @@ const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tsc
 @export var sunk_roll_degrees: float = 11.0
 
 var hull: float = 60.0
+var ship_display_name: String = "Target Ship"
+var modification_names: Array[String] = []
 var magazine_explosion_multiplier: float = 1.0
 var is_sunk: bool = false
 var is_burning: bool = false
@@ -120,14 +122,13 @@ func _stop_burning() -> void:
 
 
 func _apply_ship_type() -> void:
-	var ship_types := ContentCatalog.load_ship_types()
-	if not ship_types.has(ship_type_id):
-		return
-	var ship_type: Dictionary = ship_types[ship_type_id]
-	var combat: Dictionary = ship_type.get("combat", {})
-	max_hull = float(combat.get("max_hull", max_hull))
-	magazine_explosion_multiplier = float(combat.get("magazine_explosion_multiplier", 1.0))
-	scale = Vector3.ONE * float(ship_type.get("visual_scale", 1.0))
+	var stats: Resource = ContentCatalog.load_target_ship_stats()
+	ship_type_id = str(stats.get("ship_type_id"))
+	ship_display_name = str(stats.get("display_name"))
+	modification_names = stats.get("modification_names")
+	max_hull = float(stats.get("max_hull"))
+	magazine_explosion_multiplier = float(stats.get("magazine_explosion_multiplier"))
+	scale = Vector3.ONE * float(stats.get("visual_scale"))
 
 
 func _escalate_fire_severity(incoming_severity: String) -> String:

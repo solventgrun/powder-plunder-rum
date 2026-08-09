@@ -26,7 +26,7 @@ Ship modifications layer multipliers on top of the base ship type. The initial m
 - `copper_bottom`: improves speed and acceleration
 - `reinforced_hull`: improves hull durability with a small speed/acceleration penalty
 
-The player ship config selects a ship type and modifications in `data/ships/player_ship.yaml`.
+The player ship config selects a ship type and modifications in `data/ships/player_ship.yaml`. The current target ship does the same in `data/ships/target_ship.yaml` so explosion-risk, hull, and size testing can happen without touching scene exports.
 
 ## Alternatives Considered
 
@@ -36,10 +36,10 @@ A full inventory and upgrade system would be more complete, but it is premature 
 
 ## Consequences
 
-The prototype can now test whether ship identity matters while keeping the implementation simple. Enemy ships can later reuse these profiles without new hardcoded stats.
+The prototype can now test whether ship identity matters while keeping the implementation simple. Enemy ships can reuse these profiles without new hardcoded stats.
 
 Cannon weight and capacity are validated/displayed but do not affect sailing yet. That keeps the tradeoff visible without forcing balance decisions too early.
 
 ## Follow-Up
 
-When enemy ships exist, define their ship type and modifications through the same content path. Revisit whether cannon weight should affect speed, acceleration, or cargo capacity.
+When enemy AI exists, decide whether enemy combat loadouts also belong in YAML ship config files or in encounter definitions. Revisit whether cannon weight should affect speed, acceleration, or cargo capacity.

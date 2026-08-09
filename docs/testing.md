@@ -56,6 +56,8 @@ Ship modifications live in [data/ships/ship_modifications.yaml](../data/ships/sh
 
 The current player ship uses `brig` plus `copper_bottom`, which should make it slightly faster than a base brig. Swap to `reinforced_hull` in [data/ships/player_ship.yaml](../data/ships/player_ship.yaml) to test higher hull durability with a speed tradeoff.
 
+The current target ship lives in [data/ships/target_ship.yaml](../data/ships/target_ship.yaml). Change its `ship_type` between `sloop`, `brig`, `frigate`, and `galleon` to test target size, hull durability, and magazine explosion risk. Add modifications there to verify target-side stat layering without changing the player ship.
+
 ### Fire Severity and Magazine Explosions
 
 Fire levels live in [data/combat/status_effects.yaml](../data/combat/status_effects.yaml).
@@ -77,5 +79,6 @@ Open [game/scenes/Main.tscn](../game/scenes/Main.tscn), run the game, and try:
 - compare reload timing between sides
 - select grape or fire shot and verify you need to get much closer
 - use fire shot and watch for burning on either ship
+- swap the target ship type in YAML and confirm the debug UI, target size, hull durability, and explosion feel change
 
 If behavior changes because of YAML edits, run content validation before opening the editor.

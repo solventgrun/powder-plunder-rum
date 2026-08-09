@@ -27,7 +27,7 @@ func _run() -> void:
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, ship stats/mods, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, magazine explosion, sinking, and target damage.")
+		print("Smoke test passed: sailing, content, ship stats/mods, target ship config, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, magazine explosion, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -91,6 +91,17 @@ func _test_ship_stats(failures: Array[String]) -> void:
 		failures.append("Reinforced hull should increase effective max hull.")
 	if not float(reinforced_stats.get("max_speed")) < float(brig_sailing.get("max_speed", 999.0)):
 		failures.append("Reinforced hull should reduce effective max speed.")
+
+	var target_record := ContentCatalog.load_target_ship_record()
+	var target_stats: Resource = ContentCatalog.load_target_ship_stats()
+	var sloop: Dictionary = ship_types.get("sloop", {})
+	var sloop_combat: Dictionary = sloop.get("combat", {})
+	if target_record.get("ship_type") != "sloop":
+		failures.append("Target ship should currently use sloop ship type.")
+	if target_stats.get("ship_type_id") != "sloop":
+		failures.append("Target ship stats should load from target_ship.yaml.")
+	if not is_equal_approx(float(target_stats.get("max_hull")), float(sloop_combat.get("max_hull", 0.0))):
+		failures.append("Target hull should match configured sloop max hull.")
 
 
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:

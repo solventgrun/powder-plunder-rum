@@ -6,6 +6,7 @@ const STATUS_EFFECTS_PATH := "res://data/combat/status_effects.yaml"
 const SHIP_TYPES_PATH := "res://data/ships/ship_types.yaml"
 const SHIP_MODIFICATIONS_PATH := "res://data/ships/ship_modifications.yaml"
 const PLAYER_SHIP_PATH := "res://data/ships/player_ship.yaml"
+const TARGET_SHIP_PATH := "res://data/ships/target_ship.yaml"
 const CANNON_TYPE_SCRIPT := preload("res://game/scripts/content/CannonType.gd")
 const AMMO_TYPE_SCRIPT := preload("res://game/scripts/content/AmmoType.gd")
 const SHIP_STATS_SCRIPT := preload("res://game/scripts/content/ShipStats.gd")
@@ -90,6 +91,10 @@ static func load_player_ship_stats() -> Resource:
 	return build_ship_stats(load_player_ship_record(), load_ship_types(), load_ship_modifications())
 
 
+static func load_target_ship_stats() -> Resource:
+	return build_ship_stats(load_target_ship_record(), load_ship_types(), load_ship_modifications())
+
+
 static func build_ship_stats(ship_record: Dictionary, ship_types: Dictionary, ship_modifications: Dictionary) -> Resource:
 	var ship_type_id := str(ship_record.get("ship_type", "brig"))
 	var ship_type: Dictionary = ship_types.get(ship_type_id, ship_types.get("brig", {}))
@@ -134,6 +139,10 @@ static func load_ammo_type_records() -> Array[Dictionary]:
 
 static func load_player_ship_record() -> Dictionary:
 	return _load_player_ship_record(PLAYER_SHIP_PATH)
+
+
+static func load_target_ship_record() -> Dictionary:
+	return _load_ship_config_record(TARGET_SHIP_PATH, "target_ship")
 
 
 static func load_fire_level_records() -> Array[Dictionary]:
@@ -262,6 +271,44 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 			root.modifications.append(_parse_scalar(line.substr(2).strip_edges()))
 		elif line.begins_with("- ") and in_cannons and not current_side.is_empty():
 			root.broadsides[current_side].cannons.append(_parse_scalar(line.substr(2).strip_edges()))
+
+	return root
+
+
+static func _load_ship_config_record(path: String, root_key: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Could not open content file: %s" % path)
+		return {}
+
+	var root: Dictionary = {
+		"ship_type": "",
+		"modifications": []
+	}
+	var in_root := false
+	var in_modifications := false
+
+	while not file.eof_reached():
+		var raw_line := file.get_line()
+		var line := raw_line.strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+
+		if not raw_line.begins_with(" "):
+			in_root = line == "%s:" % root_key
+			in_modifications = false
+			continue
+
+		if not in_root:
+			continue
+
+		if line.begins_with("ship_type:"):
+			root["ship_type"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+		elif line == "modifications:":
+			in_modifications = true
+		elif line.begins_with("- ") and in_modifications:
+			root.modifications.append(_parse_scalar(line.substr(2).strip_edges()))
 
 	return root
 

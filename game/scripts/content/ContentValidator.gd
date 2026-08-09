@@ -9,6 +9,7 @@ const AMMO_DAMAGE_FIELDS := ["hull", "sail", "crew", "morale"]
 const STATUS_EFFECT_FIELDS := ["severity", "chance", "self_ignition_chance", "duration", "hull_damage_per_second"]
 const SHIP_FIELDS := ["broadsides"]
 const PLAYER_SHIP_FIELDS := ["ship_type", "modifications", "broadsides"]
+const TARGET_SHIP_FIELDS := ["ship_type", "modifications"]
 const BROADSIDES_FIELDS := ["port", "starboard"]
 const BROADSIDE_FIELDS := ["cannons"]
 const SHIP_TYPE_FIELDS := ["id", "name", "visual_scale", "sailing", "combat"]
@@ -34,6 +35,7 @@ static func validate_all() -> Dictionary:
 	validate_ship_types(ContentCatalog.load_ship_type_records(), errors, warnings)
 	validate_ship_modifications(ContentCatalog.load_ship_modification_records(), errors, warnings)
 	validate_player_ship(ContentCatalog.load_player_ship_record(), ContentCatalog.load_cannon_types(), ship_types, ship_modifications, errors, warnings)
+	validate_target_ship(ContentCatalog.load_target_ship_record(), ship_types, ship_modifications, errors, warnings)
 
 	return {
 		"errors": errors,
@@ -204,6 +206,33 @@ static func validate_player_ship(record: Dictionary, cannon_types: Dictionary, s
 			_validate_id("%s cannon id" % label, id, errors)
 			if not cannon_types.has(id):
 				errors.append("%s references unknown cannon id '%s'." % [label, id])
+
+
+static func validate_target_ship(record: Dictionary, ship_types: Dictionary, ship_modifications: Dictionary, errors: Array[String], warnings: Array[String]) -> void:
+	if record.is_empty():
+		errors.append("target_ship must contain a ship config record.")
+		return
+
+	_warn_unknown_fields("target_ship", record, TARGET_SHIP_FIELDS, warnings)
+	_validate_required_fields("target_ship", record, ["ship_type"], errors)
+	_validate_ship_type_and_modifications("target_ship", record, ship_types, ship_modifications, errors)
+
+
+static func _validate_ship_type_and_modifications(label: String, record: Dictionary, ship_types: Dictionary, ship_modifications: Dictionary, errors: Array[String]) -> void:
+	var ship_type_id := str(record.get("ship_type", ""))
+	_validate_id("%s ship_type" % label, ship_type_id, errors)
+	if not ship_type_id.is_empty() and not ship_types.has(ship_type_id):
+		errors.append("%s references unknown ship_type '%s'." % [label, ship_type_id])
+
+	if not record.get("modifications", []) is Array:
+		errors.append("%s modifications must be a list." % label)
+		return
+
+	for modification_id in record.get("modifications", []):
+		var id := str(modification_id)
+		_validate_id("%s modification" % label, id, errors)
+		if not ship_modifications.has(id):
+			errors.append("%s references unknown modification '%s'." % [label, id])
 
 
 static func _validate_mapping_fields(label: String, record: Dictionary, field: String, allowed_fields: Array, errors: Array[String], warnings: Array[String]) -> void:
