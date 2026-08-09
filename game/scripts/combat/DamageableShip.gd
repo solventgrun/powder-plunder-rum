@@ -95,7 +95,7 @@ func _sink() -> void:
 	rotation_degrees.z = sunk_roll_degrees
 	var collision := get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if collision:
-		collision.disabled = true
+		collision.set_deferred("disabled", true)
 	print("Target disabled.")
 
 

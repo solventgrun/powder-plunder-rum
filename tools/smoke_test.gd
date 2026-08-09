@@ -179,6 +179,19 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Player ship scale should match configured ship type visual_scale.")
 	if not is_equal_approx(target.scale.x, float(target_stats.get("visual_scale"))):
 		failures.append("Target ship scale should match configured ship type visual_scale.")
+	var player_hull := ship.get_node_or_null("Hull") as MeshInstance3D
+	var target_hull := target.get_node_or_null("Hull") as MeshInstance3D
+	var player_bow := ship.get_node_or_null("Bow") as MeshInstance3D
+	var target_bow := target.get_node_or_null("Bow") as MeshInstance3D
+	var player_mast := ship.get_node_or_null("Mast") as MeshInstance3D
+	var target_mast := target.get_node_or_null("Mast") as MeshInstance3D
+	if player_hull == null or target_hull == null or player_bow == null or target_bow == null or player_mast == null or target_mast == null:
+		failures.append("Player and target ships should share the same primitive hull, bow, and mast parts.")
+	else:
+		var player_hull_size: Vector3 = player_hull.mesh.get_aabb().size
+		var target_hull_size: Vector3 = target_hull.mesh.get_aabb().size
+		if not player_hull_size.is_equal_approx(target_hull_size):
+			failures.append("Same-type player and target ships should start from matching base hull dimensions.")
 
 	wind.set("wind_direction_degrees", 180.0)
 	var start_position := ship.global_position
@@ -313,10 +326,14 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 
 	var port_cannons: Array = broadside.call("_get_side_cannons", -1)
 	var starboard_cannons: Array = broadside.call("_get_side_cannons", 1)
-	if port_cannons.size() != 3:
-		failures.append("Port loadout should contain 3 cannons for the current prototype. Found %d: %s" % [port_cannons.size(), broadside.call("_get_side_cannon_ids", -1)])
-	if starboard_cannons.size() != 3:
-		failures.append("Starboard loadout should contain 3 cannons for the current prototype. Found %d: %s" % [starboard_cannons.size(), broadside.call("_get_side_cannon_ids", 1)])
+	var player_record := ContentCatalog.load_player_ship_record()
+	var broadsides: Dictionary = player_record.get("broadsides", {})
+	var expected_port: Array = broadsides.get("port", {}).get("cannons", [])
+	var expected_starboard: Array = broadsides.get("starboard", {}).get("cannons", [])
+	if port_cannons.size() != expected_port.size():
+		failures.append("Port carried cannon count should match player_ship.yaml. Found %d expected %d." % [port_cannons.size(), expected_port.size()])
+	if starboard_cannons.size() != expected_starboard.size():
+		failures.append("Starboard carried cannon count should match player_ship.yaml. Found %d expected %d." % [starboard_cannons.size(), expected_starboard.size()])
 
 	var port_range: float = broadside.call("_get_side_max_range", -1)
 	var starboard_range: float = broadside.call("_get_side_max_range", 1)
@@ -522,6 +539,7 @@ func _test_magazine_explosion(failures: Array[String]) -> void:
 		_free_scene(scene)
 		return
 
+	target.set("magazine_explosion_multiplier", 1.0)
 	var forced_explosion := {
 		"magazine_explosion": {
 			"chance": 1.0

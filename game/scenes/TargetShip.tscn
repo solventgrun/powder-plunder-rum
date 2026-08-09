@@ -1,12 +1,16 @@
-[gd_scene load_steps=5 format=3 uid="uid://targetshipproto"]
+[gd_scene load_steps=6 format=3 uid="uid://targetshipproto"]
 
 [ext_resource type="Script" path="res://game/scripts/combat/DamageableShip.gd" id="1_damageable"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
-size = Vector3(1.6, 0.7, 3.1)
+size = Vector3(1.45, 0.55, 3.25)
+
+[sub_resource type="PrismMesh" id="PrismMesh_bow"]
+left_to_right = 1.45
+size = Vector3(1.45, 0.55, 1.1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_target"]
-size = Vector3(1.8, 0.9, 3.4)
+size = Vector3(1.5, 0.65, 3.5)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_target"]
 albedo_color = Color(0.22, 0.2, 0.16, 1)
@@ -19,6 +23,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 mesh = SubResource("BoxMesh_hull")
 surface_material_override/0 = SubResource("StandardMaterial3D_target")
 
+[node name="Bow" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.35, -2.0)
+mesh = SubResource("PrismMesh_bow")
+surface_material_override/0 = SubResource("StandardMaterial3D_target")
+
+[node name="Mast" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.18, 0, 0, 0, 2.4, 0, 0, 0, 0.18, 0, 1.35, -0.15)
+mesh = SubResource("BoxMesh_hull")
+surface_material_override/0 = SubResource("StandardMaterial3D_target")
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.15)
 shape = SubResource("BoxShape3D_target")
