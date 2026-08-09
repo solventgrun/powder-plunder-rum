@@ -121,8 +121,6 @@ func _fire_side(side: int) -> bool:
 			projectile.queue_free()
 			continue
 
-		var center_offset := float(index) - float(side_cannons.size() - 1) * 0.5
-		var local_offset := Vector3(side * 1.05, 0.45, center_offset * muzzle_spacing)
 		var basis := parent_3d.global_transform.basis
 		var direction := (basis.x * side).normalized()
 		var yaw := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
@@ -132,7 +130,7 @@ func _fire_side(side: int) -> bool:
 		if spawn_parent == null:
 			spawn_parent = parent_3d.get_parent()
 		spawn_parent.add_child(projectile_3d)
-		projectile_3d.global_position = parent_3d.global_position + basis * local_offset
+		projectile_3d.global_position = _get_muzzle_global_position(parent_3d, side, index, side_cannons.size())
 		projectile_3d.call("configure", direction, cannon, ammo, parent_3d)
 		_spawn_muzzle_flash(spawn_parent, projectile_3d.global_position)
 		fired_any = true
@@ -176,6 +174,12 @@ func _spawn_muzzle_flash(spawn_parent: Node, position: Vector3) -> void:
 		return
 	spawn_parent.add_child(flash)
 	flash.global_position = position
+
+
+func _get_muzzle_global_position(parent_3d: Node3D, side: int, index: int, cannon_count: int) -> Vector3:
+	var center_offset := float(index) - float(cannon_count - 1) * 0.5
+	var local_offset := Vector3(side * 1.05, 0.45, center_offset * muzzle_spacing)
+	return parent_3d.to_global(local_offset)
 
 
 func _get_ammo_type() -> Resource:

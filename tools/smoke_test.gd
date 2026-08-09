@@ -323,6 +323,11 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 	if broadside == null:
 		_free_scene(scene)
 		return
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	if ship == null:
+		failures.append("Asymmetric loadout test could not find PlayerShip.")
+		_free_scene(scene)
+		return
 
 	var port_cannons: Array = broadside.call("_get_side_cannons", -1)
 	var starboard_cannons: Array = broadside.call("_get_side_cannons", 1)
@@ -382,6 +387,13 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 		failures.append("Broadside loadout should be allowed to carry cannons beyond available gun ports.")
 	if firing_port_cannons.size() != 4:
 		failures.append("Sloop should only fire 4 cannons per side through its gun ports.")
+
+	ship.scale = Vector3.ONE * 0.75
+	var scaled_muzzle: Vector3 = broadside.call("_get_muzzle_global_position", ship, 1, 0, 1)
+	var scaled_offset := scaled_muzzle.distance_to(ship.global_position)
+	var unscaled_offset := Vector3(1.05, 0.45, 0.0).length()
+	if not scaled_offset < unscaled_offset:
+		failures.append("Muzzle positions should respect ship visual scale so sloop cannon shots stay attached to the hull.")
 
 	_free_scene(scene)
 
