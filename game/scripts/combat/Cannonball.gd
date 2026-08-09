@@ -30,8 +30,12 @@ func configure(fire_direction: Vector3, cannon: Resource, ammo: Resource, projec
 
 
 func _physics_process(delta: float) -> void:
+	var start_position := global_position
 	var travel := speed * delta
-	global_position += direction * travel
+	var end_position := global_position + direction * travel
+	if _try_swept_hit(start_position, end_position):
+		return
+	global_position = end_position
 	remaining_range -= travel
 	if remaining_range <= 0.0:
 		_spawn_splash()
@@ -39,6 +43,28 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
+	_hit_body(body)
+
+
+func _try_swept_hit(start_position: Vector3, end_position: Vector3) -> bool:
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(start_position, end_position)
+	query.exclude = [self.get_rid()]
+	if source is CollisionObject3D:
+		query.exclude.append((source as CollisionObject3D).get_rid())
+	var result := space_state.intersect_ray(query)
+	if result.is_empty():
+		return false
+
+	global_position = result.get("position", end_position)
+	var collider: Node = result.get("collider")
+	if collider:
+		_hit_body(collider)
+		return true
+	return false
+
+
+func _hit_body(body: Node) -> void:
 	if body == source:
 		return
 	if body.has_method("apply_hull_damage"):

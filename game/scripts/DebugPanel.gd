@@ -31,11 +31,13 @@ func _process(_delta: float) -> void:
 	var combat_text := ""
 	if broadside_controller:
 		var combat: Dictionary = broadside_controller.call("get_debug_values")
-		combat_text = "\nAmmo: %s\nPort: %s\nStarboard: %s\nGun Ports: %d/side\nPort Reload: %.1fs\nStarboard Reload: %.1fs\nCannon Weight: %.0f" % [
+		combat_text = "\nAmmo: %s\nPort: %s\nStarboard: %s\nGun Ports: %d/side\nPort Range: %.0f\nStarboard Range: %.0f\nPort Reload: %.1fs\nStarboard Reload: %.1fs\nCannon Weight: %.0f" % [
 			combat.ammo_name,
 			combat.port_label,
 			combat.starboard_label,
 			combat.gun_ports_per_side,
+			combat.port_range,
+			combat.starboard_range,
 			combat.port_cooldown,
 			combat.starboard_cooldown,
 			combat.total_weight

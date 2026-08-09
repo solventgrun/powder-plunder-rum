@@ -21,6 +21,7 @@ func _run() -> void:
 	await _test_asymmetric_ship_loadout(failures)
 	await _test_ammo_switch_cooldown(failures)
 	await _test_projectile_range_splash(failures)
+	await _test_projectile_range_independent_of_ship_scale(failures)
 	await _test_cannon_hits_target(failures)
 	await _test_fire_status_effects(failures)
 	await _test_magazine_explosion(failures)
@@ -436,6 +437,49 @@ func _test_projectile_range_splash(failures: Array[String]) -> void:
 	_free_scene(scene)
 
 
+func _test_projectile_range_independent_of_ship_scale(failures: Array[String]) -> void:
+	var packed := load("res://game/scenes/Cannonball.tscn") as PackedScene
+	if packed == null:
+		failures.append("Could not load Cannonball scene for range-scale test.")
+		return
+
+	var scene := Node3D.new()
+	root.add_child(scene)
+	var source := Node3D.new()
+	source.scale = Vector3.ONE * 0.9
+	scene.add_child(source)
+
+	var cannonball := packed.instantiate() as Node3D
+	if cannonball == null:
+		failures.append("Could not instantiate Cannonball for range-scale test.")
+		_free_scene(scene)
+		return
+
+	var cannon_types := ContentCatalog.load_cannon_types()
+	var ammo_types := ContentCatalog.load_ammo_types()
+	scene.add_child(cannonball)
+	cannonball.global_position = source.to_global(Vector3(1.05, 0.45, 0.0))
+	cannonball.call("configure", Vector3.RIGHT, cannon_types.get("long_12_pounder"), ammo_types.get("round"), source)
+	var start_position := cannonball.global_position
+
+	var splash_position := Vector3.ZERO
+	for index in range(260):
+		await physics_frame
+		var splash := _get_child_named(scene, "Splash") as Node3D
+		if splash:
+			splash_position = splash.global_position
+			break
+
+	if splash_position == Vector3.ZERO:
+		failures.append("Scaled-source projectile should splash after reaching max range.")
+	else:
+		var splash_distance := Vector2(start_position.x, start_position.z).distance_to(Vector2(splash_position.x, splash_position.z))
+		if absf(splash_distance - 96.0) > 2.0:
+			failures.append("Long 12-pounder round shot should travel about 96 units from a sloop-sized source. Saw %.2f." % splash_distance)
+
+	_free_scene(scene)
+
+
 func _free_scene(scene: Node) -> void:
 	root.remove_child(scene)
 	scene.free()
@@ -598,7 +642,11 @@ func _get_broadside(scene: Node, failures: Array[String]) -> Node:
 
 
 func _scene_has_child_named(scene: Node, child_name: String) -> bool:
+	return _get_child_named(scene, child_name) != null
+
+
+func _get_child_named(scene: Node, child_name: String) -> Node:
 	for child in scene.get_children():
 		if child.name == child_name or child.name.begins_with("%s@" % child_name):
-			return true
-	return false
+			return child
+	return null

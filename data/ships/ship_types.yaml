@@ -1,7 +1,7 @@
 ship_types:
   - id: sloop
     name: Sloop
-    visual_scale: 0.75
+    visual_scale: 0.9
     sailing:
       max_speed: 6.2
       acceleration: 2.7
