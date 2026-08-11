@@ -13,6 +13,7 @@ var speed: float = 30.0
 var remaining_range: float = 30.0
 var damage: float = 4.0
 var status_effects: Dictionary = {}
+var ammo_context: Dictionary = {}
 var source: Node
 
 
@@ -27,6 +28,13 @@ func configure(fire_direction: Vector3, cannon: Resource, ammo: Resource, projec
 	remaining_range = float(cannon.get("range")) * float(ammo.get("range_multiplier"))
 	damage = float(ammo.get("hull_damage"))
 	status_effects = ammo.get("status_effects")
+	ammo_context = {
+		"sail_damage": float(ammo.get("sail_damage")),
+		"crew_damage": float(ammo.get("crew_damage")),
+		"morale_damage": float(ammo.get("morale_damage")),
+		"cannon_disable_chance": float(ammo.get("cannon_disable_chance")),
+		"gun_port_disable_chance": float(ammo.get("gun_port_disable_chance"))
+	}
 
 
 func _physics_process(delta: float) -> void:
@@ -67,12 +75,19 @@ func _try_swept_hit(start_position: Vector3, end_position: Vector3) -> bool:
 func _hit_body(body: Node) -> void:
 	if body == source:
 		return
-	if body.has_method("apply_hull_damage"):
+	if body.has_method("apply_projectile_hit"):
+		body.call("apply_projectile_hit", damage, status_effects, _get_ammo_context(), global_position)
+		_spawn_impact()
+	elif body.has_method("apply_hull_damage"):
 		body.call("apply_hull_damage", damage)
 		_spawn_impact()
 		if body.has_method("apply_status_effects"):
 			body.call("apply_status_effects", status_effects)
 	queue_free()
+
+
+func _get_ammo_context() -> Dictionary:
+	return ammo_context
 
 
 func _spawn_splash() -> void:

@@ -29,7 +29,7 @@ func calculate_sail_efficiency(ship_forward: Vector3, wind_direction: Vector3, s
 	else:
 		last_sail_efficiency = lerpf(crosswind_efficiency, tailwind_efficiency, inverse_lerp(105.0, 180.0, angle))
 
-	return last_sail_efficiency * clampf(sail_trim, 0.15, 1.0)
+	return last_sail_efficiency * clampf(sail_trim, 0.0, 1.0)
 
 
 func calculate_turn_degrees(current_speed: float, steering_input: float, delta: float) -> float:
@@ -42,9 +42,9 @@ func calculate_turn_degrees(current_speed: float, steering_input: float, delta: 
 	return -steering_input * degrees * delta
 
 
-func calculate_velocity(current_velocity: Vector3, ship_forward: Vector3, wind_direction: Vector3, sail_trim: float, delta: float) -> Vector3:
+func calculate_velocity(current_velocity: Vector3, ship_forward: Vector3, wind_direction: Vector3, sail_trim: float, delta: float, wind_speed_factor: float = 1.0) -> Vector3:
 	var efficiency := calculate_sail_efficiency(ship_forward, wind_direction, sail_trim)
-	var target_speed := max_speed * efficiency
+	var target_speed := max_speed * efficiency * clampf(wind_speed_factor, 0.0, 1.6)
 	var target_velocity := ship_forward.normalized() * target_speed
 	var rate := acceleration if target_velocity.length() > current_velocity.length() else deceleration
 	return current_velocity.move_toward(target_velocity, rate * delta)

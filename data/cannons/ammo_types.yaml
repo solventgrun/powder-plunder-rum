@@ -7,6 +7,8 @@ ammo_types:
       sail: 2
       crew: 2
       morale: 3
+      cannon_disable_chance: 0.12
+      gun_port_disable_chance: 0.08
     status_effects:
       magazine_explosion:
         chance: 0.04
@@ -19,6 +21,8 @@ ammo_types:
       sail: 14
       crew: 3
       morale: 5
+      cannon_disable_chance: 0.18
+      gun_port_disable_chance: 0.16
 
   - id: grape
     name: Grape Shot
@@ -28,6 +32,8 @@ ammo_types:
       sail: 2
       crew: 16
       morale: 10
+      cannon_disable_chance: 0.04
+      gun_port_disable_chance: 0.02
 
   - id: fire
     name: Fire Shot
@@ -37,6 +43,8 @@ ammo_types:
       sail: 8
       crew: 4
       morale: 12
+      cannon_disable_chance: 0.1
+      gun_port_disable_chance: 0.06
     status_effects:
       burning:
         severity: small

@@ -1,0 +1,144 @@
+[gd_scene load_steps=20 format=3 uid="uid://dbytnxxyl3id3"]
+
+[ext_resource type="PackedScene" uid="uid://chkdmm5thgixe" path="res://game/scenes/PlayerShip.tscn" id="1_player"]
+[ext_resource type="Script" uid="uid://itepe2bwp8he" path="res://game/scripts/WindSystem.gd" id="2_wind"]
+[ext_resource type="Script" uid="uid://b8l1jhiqd4wfc" path="res://game/scripts/FollowCamera.gd" id="3_camera"]
+[ext_resource type="Script" uid="uid://b2a1prv0y8oxc" path="res://game/scripts/DebugPanel.gd" id="4_debug"]
+[ext_resource type="Script" uid="uid://dkyuinkn87nsm" path="res://game/scripts/WindIndicator.gd" id="5_indicator"]
+[ext_resource type="PackedScene" uid="uid://bjeh2g54usabs" path="res://game/scenes/TargetShip.tscn" id="6_target"]
+[ext_resource type="Script" uid="uid://b6bf1udevswcj" path="res://game/scripts/ui/TargetIndicator.gd" id="7_target_indicator"]
+[ext_resource type="Script" uid="uid://cmohel6cd7o7x" path="res://game/scripts/ui/ReloadIndicator.gd" id="8_reload_indicator"]
+[ext_resource type="Shader" uid="uid://c5gjomssxkccc" path="res://game/shaders/StylizedOcean.gdshader" id="9_ocean_shader"]
+[ext_resource type="Script" path="res://game/scripts/ui/CombatStatusPanel.gd" id="10_combat_status"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
+size = Vector2(280, 280)
+subdivide_width = 96
+subdivide_depth = 96
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ocean"]
+render_priority = 0
+shader = ExtResource("9_ocean_shader")
+shader_parameter/deep_color = Color(0.018, 0.18, 0.38, 1)
+shader_parameter/shallow_color = Color(0.02, 0.42, 0.58, 1)
+shader_parameter/highlight_color = Color(0.72, 0.95, 0.9, 1)
+shader_parameter/wave_height = 0.18
+shader_parameter/wave_scale = 0.16
+shader_parameter/wave_speed = 0.6
+shader_parameter/color_band_strength = 0.22
+shader_parameter/whitecap_threshold = 0.82
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hull"]
+albedo_color = Color(0.48, 0.22, 0.08, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bow"]
+albedo_color = Color(0.67, 0.28, 0.12, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mast"]
+albedo_color = Color(0.92, 0.78, 0.46, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_debug"]
+font_size = 17
+font_color = Color(0.92, 0.98, 1, 1)
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.78)
+
+[node name="NavalBattle" type="Node3D" unique_id=485635468]
+
+[node name="Ocean" type="MeshInstance3D" parent="." unique_id=1264808785]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5186529, 0, -0.14039993)
+mesh = SubResource("PlaneMesh_ocean")
+surface_material_override/0 = SubResource("ShaderMaterial_ocean")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=883491680]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 18, 0)
+light_energy = 2.2
+
+[node name="WindSystem" type="Node" parent="." unique_id=1631876597]
+script = ExtResource("2_wind")
+
+[node name="PlayerShip" parent="." unique_id=1198731463 instance=ExtResource("1_player")]
+wind_system_path = NodePath("../WindSystem")
+
+[node name="Hull" parent="PlayerShip" index="0"]
+surface_material_override/0 = SubResource("StandardMaterial3D_hull")
+
+[node name="Bow" parent="PlayerShip" index="1"]
+surface_material_override/0 = SubResource("StandardMaterial3D_bow")
+
+[node name="Mast" parent="PlayerShip" index="2"]
+surface_material_override/0 = SubResource("StandardMaterial3D_mast")
+
+[node name="TargetShip" parent="." unique_id=1947254535 instance=ExtResource("6_target")]
+transform = Transform3D(0.766044, 0, 0.642788, 0, 1, 0, -0.642788, 0, 0.766044, 48, 0, -20)
+wind_system_path = NodePath("../WindSystem")
+player_ship_path = NodePath("../PlayerShip")
+initial_firing_delay = 3.0
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1234318419]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 18, 16)
+current = true
+script = ExtResource("3_camera")
+target_path = NodePath("../PlayerShip")
+
+[node name="Debug" type="CanvasLayer" parent="." unique_id=1317654118]
+script = ExtResource("4_debug")
+ship_path = NodePath("../PlayerShip")
+wind_system_path = NodePath("../WindSystem")
+target_ship_path = NodePath("../TargetShip")
+
+[node name="DebugLabel" type="Label" parent="Debug" unique_id=102800909]
+offset_left = 18.0
+offset_top = 16.0
+offset_right = 320.0
+offset_bottom = 170.0
+label_settings = SubResource("LabelSettings_debug")
+
+[node name="WindIndicator" type="Control" parent="Debug" unique_id=315468218]
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -150.0
+offset_top = 18.0
+offset_right = -22.0
+offset_bottom = 146.0
+grow_horizontal = 0
+script = ExtResource("5_indicator")
+
+[node name="TargetIndicator" type="Control" parent="Debug" unique_id=1311462149]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("7_target_indicator")
+ship_path = NodePath("../../PlayerShip")
+target_path = NodePath("../../TargetShip")
+
+[node name="ReloadIndicator" type="Control" parent="Debug" unique_id=2081853867]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8_reload_indicator")
+broadside_path = NodePath("../../PlayerShip/BroadsideController")
+
+[node name="CombatStatusPanel" type="Control" parent="Debug"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("10_combat_status")
+player_path = NodePath("../../PlayerShip")
+target_path = NodePath("../../TargetShip")
+
+[editable path="PlayerShip"]

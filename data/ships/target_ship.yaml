@@ -1,3 +1,16 @@
 target_ship:
-  ship_type: sloop
+  ship_type: galleon
+  faction: spain
+  visual_variant: patrol
+  sail_set: full
+  crew: 90
   modifications: []
+  broadsides:
+    port:
+      cannons:
+        - light_4_pounder
+        - light_4_pounder
+    starboard:
+      cannons:
+        - light_4_pounder
+        - light_4_pounder

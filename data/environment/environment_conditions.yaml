@@ -1,0 +1,7 @@
+environment_conditions:
+  - id: default_battle
+    name: Default Battle Conditions
+    wind:
+      direction_degrees: 155
+      strength: 7
+      reference_strength: 10

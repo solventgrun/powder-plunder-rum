@@ -28,6 +28,7 @@ func _process(_delta: float) -> void:
 
 	var values: Dictionary = ship.get_debug_values()
 	var wind_strength: float = wind_system.wind_strength if wind_system else 0.0
+	var wind_factor: float = wind_system.call("get_wind_speed_factor") if wind_system and wind_system.has_method("get_wind_speed_factor") else 1.0
 	var combat_text := ""
 	if broadside_controller:
 		var combat: Dictionary = broadside_controller.call("get_debug_values")
@@ -42,8 +43,16 @@ func _process(_delta: float) -> void:
 			combat.starboard_cooldown,
 			combat.total_weight
 		]
+		combat_text += "\nCrew Cannon Limit: %d" % int(combat.crew_cannon_limit)
 		if ship.has_method("get_hull_fraction"):
 			combat_text += "\nPlayer Hull: %.0f%%" % [ship.call("get_hull_fraction") * 100.0]
+			combat_text += "\nPlayer Sail/Crew/Morale: %.0f%% / %.0f%% / %.0f%%" % [
+				ship.call("get_sail_fraction") * 100.0,
+				ship.call("get_crew_fraction") * 100.0,
+				ship.call("get_morale_fraction") * 100.0
+			]
+		if ship.get("is_mast_broken"):
+			combat_text += "\nPlayer: MAST BROKEN"
 		if ship.get("is_burning"):
 			combat_text += "\nPlayer: BURNING"
 	if target_ship:
@@ -52,15 +61,22 @@ func _process(_delta: float) -> void:
 			combat_text += "\nTarget: %s" % target_name
 		var target_status := "SUNK" if target_ship.get("is_sunk") else "%.0f%%" % [target_ship.call("get_hull_fraction") * 100.0]
 		combat_text += "\nTarget Hull: %s" % target_status
+		combat_text += "\nTarget Sail/Crew/Morale: %.0f%% / %.0f%% / %.0f%%" % [
+			target_ship.call("get_sail_fraction") * 100.0,
+			target_ship.call("get_crew_fraction") * 100.0,
+			target_ship.call("get_morale_fraction") * 100.0
+		]
 		if target_ship.get("is_burning"):
 			combat_text += "\nTarget: BURNING (%s)" % str(target_ship.get("burning_severity"))
+		if target_ship.get("is_mast_broken"):
+			combat_text += "\nTarget: MAST BROKEN"
 
 	var ship_mods := str(values.ship_mods)
 	if ship_mods.is_empty():
 		ship_mods = "None"
 	var load_percent := float(values.load_fraction) * 100.0
 
-	debug_label.text = "Ship: %s\nMods: %s\nLoad: %.0f / %.0f (%.0f%%)\nLoad Move: %.2fx speed, %.2fx turn\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
+	debug_label.text = "Ship: %s\nMods: %s\nLoad: %.0f / %.0f (%.0f%%)\nLoad Move: %.2fx speed, %.2fx turn\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f (%.2fx)\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%%s" % [
 		values.ship_type,
 		ship_mods,
 		values.load_weight,
@@ -72,6 +88,7 @@ func _process(_delta: float) -> void:
 		values.heading,
 		values.wind_heading,
 		wind_strength,
+		wind_factor,
 		values.wind_angle,
 		values.sail_efficiency,
 		values.sail_trim * 100.0,

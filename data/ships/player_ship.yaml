@@ -1,15 +1,41 @@
 player_ship:
-  ship_type: brig
-  modifications:
-    - copper_bottom
+  ship_type: frigate
+  faction: pirates
+  visual_variant: worn
+  sail_set: full
+  crew: 180
+  modifications: []
+  cargo_weight: 0
   broadsides:
     port:
       cannons:
         - light_4_pounder
         - light_4_pounder
         - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
+        - light_4_pounder
     starboard:
       cannons:
-        - light_4_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
         - long_12_pounder
         - long_12_pounder

@@ -27,6 +27,8 @@ Small code-level details do not need ADRs. Put those in code comments only when 
 | [0005](decisions/0005-yaml-ship-broadside-loadouts.md) | YAML Ship Broadside Loadouts | Accepted | Define mixed port/starboard cannon loadouts in YAML with slowest-cannon side reload. |
 | [0006](decisions/0006-ship-types-and-modifications.md) | Ship Types and Modifications | Accepted | Add YAML ship profiles and simple ship modifications for handling, hull, size, and risk tuning. |
 | [0007](decisions/0007-fire-severity-and-magazine-explosions.md) | Fire Severity and Magazine Explosions | Accepted | Model fire as severity levels and add rare magazine explosions for hits and burning ships. |
+| [0008](decisions/0008-sail-crew-and-morale-damage-foundations.md) | Sail, Crew, and Morale Damage Foundations | Accepted | Track non-hull damage pools now so Milestone 2 can attach movement, reload, and surrender consequences later. |
+| [0009](decisions/0009-shared-ship-combat-component.md) | Shared Ship Combat Component | Accepted | Move ship damage/status state into a shared component so player and enemy ships use the same combat consequences. |
 
 ## Related Notes
 

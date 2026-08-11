@@ -1,10 +1,12 @@
-[gd_scene load_steps=9 format=3 uid="uid://b8x4a6l72pirate"]
+[gd_scene load_steps=11 format=3 uid="uid://b8x4a6l72pirate"]
 
 [ext_resource type="Script" path="res://game/scripts/ShipController.gd" id="1_ship"]
 [ext_resource type="Script" path="res://game/scripts/SailingModel.gd" id="2_sail"]
 [ext_resource type="Script" path="res://game/scripts/combat/BroadsideController.gd" id="3_broadside"]
 [ext_resource type="PackedScene" path="res://game/scenes/Cannonball.tscn" id="4_cannonball"]
 [ext_resource type="Script" path="res://game/scripts/combat/CannonBoomPlayer.gd" id="5_boom"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="6_visual"]
+[ext_resource type="Script" path="res://game/scripts/combat/ShipCombatComponent.gd" id="7_combat"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
 size = Vector3(1.45, 0.55, 3.25)
@@ -31,12 +33,18 @@ mesh = SubResource("PrismMesh_bow")
 transform = Transform3D(0.18, 0, 0, 0, 2.4, 0, 0, 0, 0.18, 0, 1.35, -0.15)
 mesh = SubResource("BoxMesh_hull")
 
+[node name="ShipVisualBuilder" type="Node3D" parent="."]
+script = ExtResource("6_visual")
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.15)
 shape = SubResource("BoxShape3D_ship")
 
 [node name="SailingModel" type="Node" parent="."]
 script = ExtResource("2_sail")
+
+[node name="ShipCombatComponent" type="Node" parent="."]
+script = ExtResource("7_combat")
 
 [node name="BroadsideController" type="Node" parent="."]
 script = ExtResource("3_broadside")

@@ -1,0 +1,35 @@
+flags:
+  - id: english_red_ensign
+    name: English Red Ensign
+    pattern: english_red_ensign
+    primary_color: red
+    secondary_color: white
+    accent_color: navy
+
+  - id: cross_of_burgundy
+    name: Cross of Burgundy
+    pattern: diagonal_cross
+    primary_color: white
+    secondary_color: burgundy
+    accent_color: gold
+
+  - id: french_royal
+    name: French Royal Pavilion
+    pattern: field
+    primary_color: white
+    secondary_color: gold
+    accent_color: blue
+
+  - id: statenvlag
+    name: Statenvlag
+    pattern: tricolor_horizontal
+    primary_color: red
+    secondary_color: white
+    accent_color: blue
+
+  - id: jolly_roger
+    name: Jolly Roger
+    pattern: skull
+    primary_color: black
+    secondary_color: white
+    accent_color: bone

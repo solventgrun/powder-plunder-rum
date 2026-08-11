@@ -6,6 +6,8 @@ const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 
 @export var projectile_scene: PackedScene
 @export var default_ammo_id: String = "round"
+@export_enum("player", "target") var ship_config: String = "player"
+@export var process_player_input: bool = true
 @export_range(0.1, 3.0, 0.05) var muzzle_spacing: float = 0.75
 @export_range(0.0, 15.0, 0.5, "degrees") var spread_degrees: float = 2.0
 @export_range(10.0, 120.0, 1.0) var convergence_distance: float = 55.0
@@ -24,8 +26,12 @@ var starboard_cooldown: float = 0.0
 func _ready() -> void:
 	cannon_types = ContentCatalog.load_cannon_types()
 	ammo_types = ContentCatalog.load_ammo_types()
-	ship_loadout = ContentCatalog.load_player_ship_loadout()
-	ship_stats = ContentCatalog.load_player_ship_stats()
+	if ship_config == "target":
+		ship_loadout = ContentCatalog.load_target_ship_record()
+		ship_stats = ContentCatalog.load_target_ship_stats()
+	else:
+		ship_loadout = ContentCatalog.load_player_ship_loadout()
+		ship_stats = ContentCatalog.load_player_ship_stats()
 	selected_ammo_id = default_ammo_id
 	if not ammo_types.has(selected_ammo_id) and not ammo_types.is_empty():
 		selected_ammo_id = ammo_types.keys()[0]
@@ -34,6 +40,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	port_cooldown = maxf(0.0, port_cooldown - delta)
 	starboard_cooldown = maxf(0.0, starboard_cooldown - delta)
+
+	if not process_player_input:
+		return
 
 	if Input.is_action_just_pressed("select_ammo_1"):
 		select_ammo_by_index(0)
@@ -81,8 +90,13 @@ func get_debug_values() -> Dictionary:
 		"starboard_cooldown": starboard_cooldown,
 		"port_count": _get_side_firing_cannons(-1).size(),
 		"starboard_count": _get_side_firing_cannons(1).size(),
+		"port_disabled_cannons": _get_parent_disabled_cannons(-1),
+		"starboard_disabled_cannons": _get_parent_disabled_cannons(1),
+		"port_disabled_gun_ports": _get_parent_disabled_gun_ports(-1),
+		"starboard_disabled_gun_ports": _get_parent_disabled_gun_ports(1),
 		"port_carried_count": _get_side_cannons(-1).size(),
 		"starboard_carried_count": _get_side_cannons(1).size(),
+		"crew_cannon_limit": _get_parent_active_cannon_limit(),
 		"gun_ports_per_side": _get_gun_ports_per_side(),
 		"port_weight": _get_side_weight(-1),
 		"starboard_weight": _get_side_weight(1),
@@ -211,8 +225,12 @@ func _get_side_cannons(side: int) -> Array[Resource]:
 
 func _get_side_firing_cannons(side: int) -> Array[Resource]:
 	var cannons := _get_side_cannons(side)
-	var port_limit := _get_gun_ports_per_side()
-	return cannons.slice(0, mini(cannons.size(), port_limit))
+	var disabled_cannons := _get_parent_disabled_cannons(side)
+	var active_cannons := cannons.slice(0, maxi(0, cannons.size() - disabled_cannons))
+	var port_limit := maxi(0, _get_gun_ports_per_side() - _get_parent_disabled_gun_ports(side))
+	var crew_limit := _get_parent_active_cannon_limit()
+	var firing_limit := mini(active_cannons.size(), mini(port_limit, crew_limit))
+	return active_cannons.slice(0, firing_limit)
 
 
 func _get_side_cannon_ids(side: int) -> Array:
@@ -270,4 +288,25 @@ func _get_side_label(side: int) -> String:
 func _get_gun_ports_per_side() -> int:
 	if ship_stats:
 		return int(ship_stats.get("gun_ports_per_side"))
+	return 999
+
+
+func _get_parent_disabled_cannons(side: int) -> int:
+	var parent := get_parent()
+	if parent and parent.has_method("get_disabled_cannon_count"):
+		return int(parent.call("get_disabled_cannon_count", side))
+	return 0
+
+
+func _get_parent_disabled_gun_ports(side: int) -> int:
+	var parent := get_parent()
+	if parent and parent.has_method("get_disabled_gun_port_count"):
+		return int(parent.call("get_disabled_gun_port_count", side))
+	return 0
+
+
+func _get_parent_active_cannon_limit() -> int:
+	var parent := get_parent()
+	if parent and parent.has_method("get_active_cannon_limit"):
+		return int(parent.call("get_active_cannon_limit"))
 	return 999

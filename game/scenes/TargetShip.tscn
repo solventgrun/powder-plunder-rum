@@ -1,6 +1,12 @@
-[gd_scene load_steps=6 format=3 uid="uid://targetshipproto"]
+[gd_scene load_steps=12 format=3 uid="uid://targetshipproto"]
 
-[ext_resource type="Script" path="res://game/scripts/combat/DamageableShip.gd" id="1_damageable"]
+[ext_resource type="Script" path="res://game/scripts/EnemyShipController.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="2_visual"]
+[ext_resource type="Script" path="res://game/scripts/SailingModel.gd" id="3_sail"]
+[ext_resource type="Script" path="res://game/scripts/combat/BroadsideController.gd" id="4_broadside"]
+[ext_resource type="PackedScene" path="res://game/scenes/Cannonball.tscn" id="5_cannonball"]
+[ext_resource type="Script" path="res://game/scripts/combat/CannonBoomPlayer.gd" id="6_boom"]
+[ext_resource type="Script" path="res://game/scripts/combat/ShipCombatComponent.gd" id="7_combat"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
 size = Vector3(1.45, 0.55, 3.25)
@@ -15,8 +21,8 @@ size = Vector3(1.5, 0.65, 3.5)
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_target"]
 albedo_color = Color(0.22, 0.2, 0.16, 1)
 
-[node name="TargetShip" type="StaticBody3D"]
-script = ExtResource("1_damageable")
+[node name="TargetShip" type="CharacterBody3D"]
+script = ExtResource("1_enemy")
 
 [node name="Hull" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
@@ -33,6 +39,25 @@ transform = Transform3D(0.18, 0, 0, 0, 2.4, 0, 0, 0, 0.18, 0, 1.35, -0.15)
 mesh = SubResource("BoxMesh_hull")
 surface_material_override/0 = SubResource("StandardMaterial3D_target")
 
+[node name="ShipVisualBuilder" type="Node3D" parent="."]
+script = ExtResource("2_visual")
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.15)
 shape = SubResource("BoxShape3D_target")
+
+[node name="SailingModel" type="Node" parent="."]
+script = ExtResource("3_sail")
+
+[node name="ShipCombatComponent" type="Node" parent="."]
+script = ExtResource("7_combat")
+
+[node name="BroadsideController" type="Node" parent="."]
+script = ExtResource("4_broadside")
+projectile_scene = ExtResource("5_cannonball")
+ship_config = "target"
+process_player_input = false
+
+[node name="CannonBoomPlayer" type="AudioStreamPlayer3D" parent="BroadsideController"]
+script = ExtResource("6_boom")
+volume_db = -7.0

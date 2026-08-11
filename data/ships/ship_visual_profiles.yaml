@@ -1,0 +1,202 @@
+ship_visual_profiles:
+  - id: sloop_basic
+    name: Sloop Basic
+    scale: 1.0
+    hull:
+      mode: procedural
+      length: 3.0
+      width: 1.2
+      height: 0.46
+      bow_length: 0.9
+      stern_height: 0.12
+      deck_color: wood_light
+    masts:
+      main:
+        position: [0.0, 0.35, -0.12]
+        height: 2.15
+        thickness: 0.11
+    sails:
+      mainsail:
+        mast: main
+        type: fore_aft
+        position: [0.12, 1.38, 0.02]
+        size: [1.1, 1.45]
+      jib:
+        mast: main
+        type: triangular
+        position: [0.0, 1.05, -1.05]
+        size: [0.85, 1.0]
+    flags:
+      stern_ensign:
+        position: [0.0, 1.15, 1.45]
+        size: [0.54, 0.32]
+    visual_states:
+      light_damage_threshold: 0.7
+      heavy_damage_threshold: 0.35
+      deck_fire_main: [0.0, 0.75, 0.0]
+      sail_fire_main: [0.0, 1.65, -0.12]
+
+  - id: brigantine_basic
+    name: Brigantine Basic
+    scale: 1.12
+    hull:
+      mode: procedural
+      length: 3.45
+      width: 1.36
+      height: 0.54
+      bow_length: 0.95
+      stern_height: 0.24
+      deck_color: wood_medium
+    masts:
+      fore:
+        position: [0.0, 0.42, -0.85]
+        height: 2.25
+        thickness: 0.12
+      main:
+        position: [0.0, 0.42, 0.32]
+        height: 2.55
+        thickness: 0.13
+    sails:
+      fore_course:
+        mast: fore
+        type: square
+        position: [0.0, 1.45, -0.85]
+        size: [1.25, 0.95]
+      main_fore_aft:
+        mast: main
+        type: fore_aft
+        position: [0.16, 1.48, 0.32]
+        size: [1.2, 1.45]
+      jib:
+        mast: fore
+        type: triangular
+        position: [0.0, 1.12, -1.48]
+        size: [0.9, 1.05]
+    flags:
+      stern_ensign:
+        position: [0.0, 1.42, 1.62]
+        size: [0.62, 0.36]
+      mast_pennant:
+        position: [0.0, 2.92, 0.32]
+        size: [0.5, 0.16]
+    visual_states:
+      light_damage_threshold: 0.7
+      heavy_damage_threshold: 0.35
+      deck_fire_main: [0.0, 0.85, 0.18]
+      sail_fire_main: [0.0, 1.88, 0.32]
+
+  - id: frigate_basic
+    name: Frigate Basic
+    scale: 1.35
+    hull:
+      mode: procedural
+      length: 4.2
+      width: 1.5
+      height: 0.62
+      bow_length: 1.05
+      stern_height: 0.34
+      deck_color: wood_dark
+    masts:
+      fore:
+        position: [0.0, 0.48, -1.2]
+        height: 2.55
+        thickness: 0.12
+      main:
+        position: [0.0, 0.48, -0.05]
+        height: 2.95
+        thickness: 0.14
+      mizzen:
+        position: [0.0, 0.48, 1.0]
+        height: 2.45
+        thickness: 0.11
+    sails:
+      fore_course:
+        mast: fore
+        type: square
+        position: [0.0, 1.55, -1.2]
+        size: [1.35, 0.95]
+      main_course:
+        mast: main
+        type: square
+        position: [0.0, 1.75, -0.05]
+        size: [1.65, 1.08]
+      main_topsail:
+        mast: main
+        type: square
+        position: [0.0, 2.55, -0.05]
+        size: [1.25, 0.78]
+      mizzen_lateen:
+        mast: mizzen
+        type: lateen
+        position: [0.1, 1.55, 1.0]
+        size: [1.05, 0.9]
+    flags:
+      stern_ensign:
+        position: [0.0, 1.72, 2.0]
+        size: [0.72, 0.42]
+      mast_pennant:
+        position: [0.0, 3.36, -0.05]
+        size: [0.62, 0.18]
+    visual_states:
+      light_damage_threshold: 0.72
+      heavy_damage_threshold: 0.38
+      deck_fire_main: [0.0, 0.95, 0.0]
+      sail_fire_main: [0.0, 2.1, -0.05]
+
+  - id: galleon_basic
+    name: Galleon Basic
+    scale: 1.65
+    hull:
+      mode: procedural
+      length: 4.35
+      width: 1.72
+      height: 0.76
+      bow_length: 1.08
+      stern_height: 0.55
+      deck_color: wood_dark
+    masts:
+      fore:
+        position: [0.0, 0.58, -1.12]
+        height: 2.7
+        thickness: 0.13
+      main:
+        position: [0.0, 0.58, -0.05]
+        height: 3.2
+        thickness: 0.15
+      mizzen:
+        position: [0.0, 0.58, 1.08]
+        height: 2.55
+        thickness: 0.12
+    sails:
+      fore_course:
+        mast: fore
+        type: square
+        position: [0.0, 1.68, -1.12]
+        size: [1.48, 1.0]
+      main_course:
+        mast: main
+        type: square
+        position: [0.0, 1.95, -0.05]
+        size: [1.9, 1.18]
+      main_topsail:
+        mast: main
+        type: square
+        position: [0.0, 2.85, -0.05]
+        size: [1.42, 0.82]
+      mizzen_lateen:
+        mast: mizzen
+        type: lateen
+        position: [0.15, 1.72, 1.08]
+        size: [1.18, 1.0]
+    flags:
+      stern_ensign:
+        position: [0.0, 2.05, 2.08]
+        size: [0.82, 0.48]
+      mast_pennant:
+        position: [0.0, 3.66, -0.05]
+        size: [0.72, 0.2]
+    visual_states:
+      light_damage_threshold: 0.74
+      heavy_damage_threshold: 0.42
+      deck_fire_main: [0.0, 1.05, 0.12]
+      sail_fire_main: [0.0, 2.35, -0.05]

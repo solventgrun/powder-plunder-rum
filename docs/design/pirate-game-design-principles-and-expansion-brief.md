@@ -640,14 +640,28 @@ The cannon should go boom.
 
 Introduce basic naval combat.
 
-Possible systems:
+Required systems:
 
-- enemy ship
+- single enemy ship
+- same wind-relative sailing rules for player and enemy
+- enemy maneuvering
+- enemy broadside firing
 - hull health
-- maneuvering
+- sail damage reducing speed
+- mast breaking when sails are destroyed
+- crew damage reducing active cannon capacity
 - cannon reload
-- basic enemy steering
-- sinking / surrender
+- sinking
+- player-sunk notice
+- enemy-sunk placeholder victory notice
+
+Deferred from this milestone:
+
+- surrender
+- boarding
+- capture
+- post-battle rewards
+- multiple ships
 
 ### Milestone 3 - Overworld Encounter
 
@@ -719,6 +733,22 @@ Examples:
 - surviving player crew
 
 This milestone establishes the "distinct minigames, continuous consequences" architecture.
+
+### Future Milestone - Advanced Naval Combat
+
+Expand boat fights beyond the single-ship duel.
+
+Possible systems:
+
+- multiple enemy ships
+- allied ships
+- boarding
+- capture
+- prize crews
+- loot / rewards
+- surrendered vessels
+- more advanced enemy tactics
+- battle result payloads for future overworld integration
 
 ## Guiding Question for Agents
 

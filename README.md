@@ -20,7 +20,7 @@ No .NET runtime, C#, GDExtension, database, service, or external dependency is r
 
 1. Open this `pirates` folder in Godot.
 2. Run the project.
-3. The main scene is `res://game/scenes/Main.tscn`.
+3. The main scene is `res://game/scenes/NavalBattle.tscn`.
 
 ## Automated Smoke Test
 
@@ -30,7 +30,7 @@ From this folder, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_smoke_test.ps1
 ```
 
-The smoke test loads the main scene headlessly, checks basic sailing-model assumptions, confirms the ship moves under wind, verifies YAML ship stats/modifications and loadouts, verifies broadside side behavior, checks ammo-switch cooldown, confirms missed shots despawn with splashes, and verifies impact flashes, burning, self-ignition, magazine explosions, sinking state, and target damage. If Godot is installed somewhere else, set `GODOT_BIN` to the Godot 4 console executable before running the script.
+The smoke test loads the naval battle scene headlessly, checks basic sailing-model assumptions, confirms the ship moves under wind, verifies YAML ship stats/modifications and loadouts, verifies broadside side behavior, checks ammo-switch cooldown, confirms missed shots despawn with splashes, and verifies impact flashes, burning, self-ignition, magazine explosions, sinking state, and target damage. If Godot is installed somewhere else, set `GODOT_BIN` to the Godot 4 console executable before running the script.
 
 To validate YAML content data without running the full smoke test:
 
@@ -52,10 +52,14 @@ Content validation fails on missing or invalid required fields. Unknown fields p
 - `2`: select Chain Shot
 - `3`: select Grape Shot
 - `4`: select Fire Shot
+- `[` / `]`: decrease / increase wind strength
+- `,` / `.`: rotate wind direction
 
 The boat accelerates based on wind direction, sail trim, and heading. Sailing into the wind is weak; crosswind and downwind sailing are stronger.
 
 Changing ammo immediately puts both broadsides into reload cooldown, representing the crew shifting shot types.
+
+Default battle wind is loaded from `data/environment/environment_conditions.yaml`. The wind keys are debug playtest overrides for quick tuning.
 
 ## Structure
 

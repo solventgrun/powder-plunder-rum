@@ -2,13 +2,19 @@ ship_types:
   - id: sloop
     name: Sloop
     visual_scale: 1.0
+    visual_profile: sloop_basic
     sailing:
-      max_speed: 6.2
-      acceleration: 2.7
-      deceleration: 1.7
-      turn_rate: 78
+      max_speed: 6.4
+      acceleration: 3.4
+      deceleration: 2.4
+      turn_rate: 106
+      minimum_turn_rate: 34
+      sail_trim_speed: 1.15
     combat:
       max_hull: 110
+      max_sail: 90
+      max_crew: 75
+      max_morale: 100
       magazine_explosion_multiplier: 1.35
       usable_load_capacity: 40
       gun_ports: 8
@@ -16,13 +22,19 @@ ship_types:
   - id: brig
     name: Brigantine
     visual_scale: 1.12
+    visual_profile: brigantine_basic
     sailing:
-      max_speed: 5.3
-      acceleration: 2.1
-      deceleration: 1.45
-      turn_rate: 56
+      max_speed: 5.0
+      acceleration: 1.65
+      deceleration: 1.15
+      turn_rate: 42
+      minimum_turn_rate: 16
+      sail_trim_speed: 0.55
     combat:
       max_hull: 180
+      max_sail: 140
+      max_crew: 120
+      max_morale: 100
       magazine_explosion_multiplier: 1.0
       usable_load_capacity: 90
       gun_ports: 14
@@ -30,27 +42,39 @@ ship_types:
   - id: frigate
     name: Frigate
     visual_scale: 1.35
+    visual_profile: frigate_basic
     sailing:
       max_speed: 4.6
       acceleration: 1.55
       deceleration: 1.15
       turn_rate: 38
+      minimum_turn_rate: 12
+      sail_trim_speed: 0.45
     combat:
       max_hull: 280
+      max_sail: 210
+      max_crew: 220
+      max_morale: 100
       magazine_explosion_multiplier: 0.8
-      usable_load_capacity: 180
+      usable_load_capacity: 220
       gun_ports: 28
 
   - id: galleon
     name: Galleon
     visual_scale: 1.65
+    visual_profile: galleon_basic
     sailing:
       max_speed: 3.5
       acceleration: 1.0
       deceleration: 0.85
       turn_rate: 24
+      minimum_turn_rate: 8
+      sail_trim_speed: 0.35
     combat:
       max_hull: 430
+      max_sail: 300
+      max_crew: 360
+      max_morale: 100
       magazine_explosion_multiplier: 0.55
       usable_load_capacity: 300
       gun_ports: 36

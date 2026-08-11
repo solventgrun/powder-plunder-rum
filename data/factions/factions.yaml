@@ -1,0 +1,25 @@
+factions:
+  - id: england
+    name: England
+    flag: english_red_ensign
+    sail_palette: naval_canvas
+
+  - id: spain
+    name: Spain
+    flag: cross_of_burgundy
+    sail_palette: spanish_canvas
+
+  - id: france
+    name: France
+    flag: french_royal
+    sail_palette: naval_canvas
+
+  - id: dutch
+    name: Dutch
+    flag: statenvlag
+    sail_palette: dutch_canvas
+
+  - id: pirates
+    name: Pirates
+    flag: jolly_roger
+    sail_palette: pirate_canvas

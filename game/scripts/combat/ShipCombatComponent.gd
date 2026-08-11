@@ -1,56 +1,73 @@
-extends StaticBody3D
-class_name DamageableShip
+extends Node
+class_name ShipCombatComponent
 
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 const BurningFlameScene := preload("res://game/scenes/BurningFlame.tscn")
 const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tscn")
+
 const NON_BURNING_DIRECT_MAGAZINE_EXPLOSION_MULTIPLIER := 0.25
+const CREW_PER_CANNON := 3.0
 
-@export var max_hull: float = 60.0
-@export var max_sail: float = 60.0
-@export var max_crew: float = 60.0
-@export var max_morale: float = 100.0
-@export var ship_type_id: String = "sloop"
-@export var sunk_drop: float = 0.55
-@export var sunk_roll_degrees: float = 11.0
-@export var minimum_cannon_hit_scale: float = 1.12
+signal sunk
+signal mast_broken
 
-var hull: float = 60.0
-var sail: float = 60.0
-var crew: float = 60.0
+var max_hull: float = 80.0
+var max_sail: float = 80.0
+var max_crew: float = 80.0
+var max_morale: float = 100.0
+var hull: float = 80.0
+var sail: float = 80.0
+var crew: float = 80.0
 var morale: float = 100.0
-var ship_display_name: String = "Target Ship"
-var modification_names: Array[String] = []
 var magazine_explosion_multiplier: float = 1.0
 var is_sunk: bool = false
 var is_burning: bool = false
-var burning_severity: String = ""
+var is_mast_broken: bool = false
 var burning_time_remaining: float = 0.0
 var burning_hull_damage_per_second: float = 0.0
 var burning_magazine_explosion_chance_per_second: float = 0.0
 var burning_explosion_tick: float = 0.0
 var burning_growth_chance_per_second: float = 0.0
 var burning_growth_tick: float = 0.0
+var burning_severity: String = ""
 var fire_levels: Dictionary = {}
 var ship_loadout: Dictionary = {}
 var ship_stats: Resource
 var disabled_cannons := {"port": 0, "starboard": 0}
 var disabled_gun_ports := {"port": 0, "starboard": 0}
-
 var flame_visual: Node3D
-@onready var ship_visuals: Node = $ShipVisualBuilder
+var visual_node: Node
+var display_name: String = "Ship"
+var sunk_drop: float = 0.5
+var sunk_roll_degrees: float = 9.0
 
 
-func _ready() -> void:
+func configure(stats: Resource, loadout: Dictionary, visuals: Node, name_override: String = "") -> void:
 	fire_levels = ContentCatalog.load_fire_levels()
-	ship_loadout = ContentCatalog.load_target_ship_record()
-	_apply_ship_type()
-	if ship_visuals:
-		ship_visuals.apply_visuals(ship_loadout, ship_stats)
+	ship_stats = stats
+	ship_loadout = loadout
+	visual_node = visuals
+	if stats:
+		max_hull = float(stats.get("max_hull"))
+		max_sail = float(stats.get("max_sail"))
+		max_crew = float(stats.get("max_crew"))
+		max_morale = float(stats.get("max_morale"))
+		magazine_explosion_multiplier = float(stats.get("magazine_explosion_multiplier"))
+		display_name = str(stats.get("display_name"))
+	if not name_override.is_empty():
+		display_name = name_override
 	hull = max_hull
+	sail = max_sail
+	crew = clampf(float(stats.get("starting_crew")) if stats else max_crew, 0.0, max_crew)
+	morale = max_morale
+	is_sunk = false
+	is_burning = false
+	is_mast_broken = false
+	disabled_cannons = {"port": 0, "starboard": 0}
+	disabled_gun_ports = {"port": 0, "starboard": 0}
 
 
-func _process(delta: float) -> void:
+func update_status(delta: float) -> void:
 	if is_sunk or not is_burning:
 		return
 
@@ -71,15 +88,25 @@ func _process(delta: float) -> void:
 		_stop_burning()
 
 
+func apply_projectile_hit(amount: float, status_effects: Dictionary, ammo_context: Dictionary, hit_position: Vector3) -> void:
+	if is_sunk:
+		return
+	apply_hull_damage(amount)
+	apply_sail_damage(float(ammo_context.get("sail_damage", 0.0)))
+	apply_crew_damage(float(ammo_context.get("crew_damage", 0.0)))
+	apply_morale_damage(float(ammo_context.get("morale_damage", 0.0)))
+	_roll_armament_damage(_side_from_hit_position(hit_position), ammo_context)
+	apply_status_effects(status_effects)
+
+
 func apply_hull_damage(amount: float) -> void:
 	if is_sunk:
 		return
-
 	hull = maxf(0.0, hull - amount)
-	if ship_visuals:
-		ship_visuals.set_damage_fraction(get_hull_fraction())
+	if visual_node:
+		visual_node.call("set_damage_fraction", get_hull_fraction())
 	if amount >= 0.5 or hull <= 0.0:
-		print("Target hull: %.1f / %.1f" % [hull, max_hull])
+		print("%s hull: %.1f / %.1f" % [display_name, hull, max_hull])
 	if hull <= 0.0:
 		_sink()
 
@@ -88,6 +115,8 @@ func apply_sail_damage(amount: float) -> void:
 	if is_sunk:
 		return
 	sail = maxf(0.0, sail - amount)
+	if sail <= 0.0 and not is_mast_broken:
+		break_mast()
 
 
 func apply_crew_damage(amount: float) -> void:
@@ -100,17 +129,6 @@ func apply_morale_damage(amount: float) -> void:
 	if is_sunk:
 		return
 	morale = maxf(0.0, morale - amount)
-
-
-func apply_projectile_hit(amount: float, status_effects: Dictionary, ammo_context: Dictionary, hit_position: Vector3) -> void:
-	if is_sunk:
-		return
-	apply_hull_damage(amount)
-	apply_sail_damage(float(ammo_context.get("sail_damage", 0.0)))
-	apply_crew_damage(float(ammo_context.get("crew_damage", 0.0)))
-	apply_morale_damage(float(ammo_context.get("morale_damage", 0.0)))
-	_roll_armament_damage(_side_from_hit_position(hit_position), ammo_context)
-	apply_status_effects(status_effects)
 
 
 func apply_status_effects(status_effects: Dictionary) -> void:
@@ -132,28 +150,51 @@ func apply_status_effects(status_effects: Dictionary) -> void:
 			_explode()
 
 
+func break_mast() -> void:
+	if is_sunk or is_mast_broken:
+		return
+	is_mast_broken = true
+	sail = 0.0
+	var owner_3d := get_parent() as Node3D
+	if owner_3d:
+		if owner_3d is CharacterBody3D:
+			(owner_3d as CharacterBody3D).velocity = Vector3.ZERO
+		var mast := owner_3d.get_node_or_null("Mast") as MeshInstance3D
+		if mast:
+			mast.rotation_degrees.z = 72.0
+			mast.position.y = maxf(0.45, mast.position.y * 0.45)
+	if visual_node and visual_node.has_method("set_mast_broken"):
+		visual_node.call("set_mast_broken", true)
+	print("%s mast broken." % display_name)
+	mast_broken.emit()
+
+
 func get_hull_fraction() -> float:
-	if max_hull <= 0.0:
-		return 0.0
-	return hull / max_hull
+	return hull / max_hull if max_hull > 0.0 else 0.0
 
 
 func get_sail_fraction() -> float:
-	if max_sail <= 0.0:
-		return 0.0
-	return sail / max_sail
+	return sail / max_sail if max_sail > 0.0 else 0.0
 
 
 func get_crew_fraction() -> float:
-	if max_crew <= 0.0:
-		return 0.0
-	return crew / max_crew
+	return crew / max_crew if max_crew > 0.0 else 0.0
 
 
 func get_morale_fraction() -> float:
-	if max_morale <= 0.0:
+	return morale / max_morale if max_morale > 0.0 else 0.0
+
+
+func get_movement_power() -> float:
+	if is_sunk or is_mast_broken:
 		return 0.0
-	return morale / max_morale
+	return clampf(lerpf(0.25, 1.0, get_sail_fraction()), 0.0, 1.0)
+
+
+func get_active_cannon_limit() -> int:
+	if is_sunk:
+		return 0
+	return int(floor(crew / CREW_PER_CANNON))
 
 
 func get_disabled_cannon_count(side: int) -> int:
@@ -162,19 +203,6 @@ func get_disabled_cannon_count(side: int) -> int:
 
 func get_disabled_gun_port_count(side: int) -> int:
 	return int(disabled_gun_ports.get(_side_name(side), 0))
-
-
-func _sink() -> void:
-	is_sunk = true
-	_stop_burning()
-	position.y -= sunk_drop
-	rotation_degrees.z = sunk_roll_degrees
-	if ship_visuals:
-		ship_visuals.set_damage_fraction(0.0)
-	var collision := get_node_or_null("CollisionShape3D") as CollisionShape3D
-	if collision:
-		collision.set_deferred("disabled", true)
-	print("Target disabled.")
 
 
 func _apply_burning(severity: String) -> void:
@@ -187,14 +215,15 @@ func _apply_burning(severity: String) -> void:
 	burning_growth_chance_per_second = float(level.get("growth_chance_per_second", 0.0))
 	burning_magazine_explosion_chance_per_second = float(level.get("magazine_explosion_chance_per_second", 0.0))
 	if flame_visual == null:
+		var owner_3d := get_parent() as Node3D
 		flame_visual = BurningFlameScene.instantiate() as Node3D
-		if flame_visual:
-			add_child(flame_visual)
-			flame_visual.position = ship_visuals.get_fire_socket_position("deck_fire_main", Vector3(0.0, 0.45, 0.0)) if ship_visuals else Vector3(0.0, 0.45, 0.0)
+		if owner_3d and flame_visual:
+			owner_3d.add_child(flame_visual)
+			flame_visual.position = visual_node.call("get_fire_socket_position", "deck_fire_main", Vector3(0.0, 0.65, 0.0)) if visual_node else Vector3(0.0, 0.65, 0.0)
 	if flame_visual:
 		flame_visual.scale = Vector3.ONE * float(level.get("visual_scale", 1.0))
-	if ship_visuals:
-		ship_visuals.set_fire_state(true, burning_severity)
+	if visual_node:
+		visual_node.call("set_fire_state", true, burning_severity)
 
 
 func _stop_burning() -> void:
@@ -209,27 +238,26 @@ func _stop_burning() -> void:
 	if flame_visual:
 		flame_visual.queue_free()
 		flame_visual = null
-	if ship_visuals:
-		ship_visuals.set_fire_state(false, "")
+	if visual_node:
+		visual_node.call("set_fire_state", false, "")
 
 
-func _apply_ship_type() -> void:
-	var stats: Resource = ContentCatalog.load_target_ship_stats()
-	ship_stats = stats
-	ship_type_id = str(stats.get("ship_type_id"))
-	ship_display_name = str(stats.get("display_name"))
-	modification_names = stats.get("modification_names")
-	max_hull = float(stats.get("max_hull"))
-	max_sail = float(stats.get("max_sail"))
-	max_crew = float(stats.get("max_crew"))
-	max_morale = float(stats.get("max_morale"))
-	sail = max_sail
-	crew = max_crew
-	morale = max_morale
-	magazine_explosion_multiplier = float(stats.get("magazine_explosion_multiplier"))
-	var visual_scale := float(stats.get("visual_scale"))
-	scale = Vector3.ONE * visual_scale
-	_apply_cannon_hit_forgiveness(visual_scale)
+func _sink() -> void:
+	is_sunk = true
+	_stop_burning()
+	var owner_3d := get_parent() as Node3D
+	if owner_3d:
+		if owner_3d is CharacterBody3D:
+			(owner_3d as CharacterBody3D).velocity = Vector3.ZERO
+		owner_3d.position.y -= sunk_drop
+		owner_3d.rotation_degrees.z = sunk_roll_degrees
+		var collision := owner_3d.get_node_or_null("CollisionShape3D") as CollisionShape3D
+		if collision:
+			collision.set_deferred("disabled", true)
+	if visual_node:
+		visual_node.call("set_damage_fraction", 0.0)
+	print("%s disabled." % display_name)
+	sunk.emit()
 
 
 func _roll_armament_damage(side: int, ammo_context: Dictionary) -> void:
@@ -248,7 +276,7 @@ func _disable_cannon(side_name: String) -> void:
 	if disabled >= carried:
 		return
 	disabled_cannons[side_name] = disabled + 1
-	print("%s %s cannon disabled (%d/%d disabled)." % [ship_display_name, side_name, disabled + 1, carried])
+	print("%s %s cannon disabled (%d/%d disabled)." % [display_name, side_name, disabled + 1, carried])
 
 
 func _disable_gun_port(side_name: String) -> void:
@@ -257,7 +285,7 @@ func _disable_gun_port(side_name: String) -> void:
 	if disabled >= ports:
 		return
 	disabled_gun_ports[side_name] = disabled + 1
-	print("%s %s gun port disabled (%d/%d disabled)." % [ship_display_name, side_name, disabled + 1, ports])
+	print("%s %s gun port disabled (%d/%d disabled)." % [display_name, side_name, disabled + 1, ports])
 
 
 func _get_carried_cannon_count(side_name: String) -> int:
@@ -267,23 +295,15 @@ func _get_carried_cannon_count(side_name: String) -> int:
 
 
 func _side_from_hit_position(hit_position: Vector3) -> int:
-	var local_hit := to_local(hit_position)
+	var owner_3d := get_parent() as Node3D
+	if owner_3d == null:
+		return 1
+	var local_hit := owner_3d.to_local(hit_position)
 	return -1 if local_hit.x < 0.0 else 1
 
 
 func _side_name(side: int) -> String:
 	return "port" if side < 0 else "starboard"
-
-
-func _apply_cannon_hit_forgiveness(visual_scale: float) -> void:
-	var collision := get_node_or_null("CollisionShape3D") as CollisionShape3D
-	if collision == null:
-		return
-	if visual_scale >= minimum_cannon_hit_scale:
-		collision.scale = Vector3.ONE
-		return
-	var forgiveness_scale := minimum_cannon_hit_scale / maxf(visual_scale, 0.01)
-	collision.scale = Vector3.ONE * forgiveness_scale
 
 
 func _escalate_fire_severity(incoming_severity: String) -> String:
@@ -315,13 +335,21 @@ func _fire_severity_rank(severity: String) -> int:
 func _explode() -> void:
 	if is_sunk:
 		return
-	var spawn_parent := get_tree().current_scene
-	if spawn_parent == null:
-		spawn_parent = get_parent()
+	var spawn_parent := _get_effect_spawn_parent()
 	if spawn_parent:
 		var explosion := MagazineExplosionScene.instantiate() as Node3D
 		if explosion:
 			spawn_parent.add_child(explosion)
-			explosion.global_position = global_position
+			var owner_3d := get_parent() as Node3D
+			explosion.global_position = owner_3d.global_position if owner_3d else Vector3.ZERO
 	hull = 0.0
 	_sink()
+
+
+func _get_effect_spawn_parent() -> Node:
+	if get_tree().current_scene:
+		return get_tree().current_scene
+	var owner_node := get_parent()
+	if owner_node and owner_node.get_parent():
+		return owner_node.get_parent()
+	return owner_node

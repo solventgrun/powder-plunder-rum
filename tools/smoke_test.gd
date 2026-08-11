@@ -1,9 +1,10 @@
 extends SceneTree
 
-const MAIN_SCENE_PATH := "res://game/scenes/Main.tscn"
+const NAVAL_BATTLE_SCENE_PATH := "res://game/scenes/NavalBattle.tscn"
 const SAILING_MODEL_PATH := "res://game/scripts/SailingModel.gd"
 const ContentValidator := preload("res://game/scripts/content/ContentValidator.gd")
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
+const WindSystem := preload("res://game/scripts/WindSystem.gd")
 
 
 func _initialize() -> void:
@@ -16,6 +17,7 @@ func _run() -> void:
 	_test_content_validation(failures)
 	_test_ship_stats(failures)
 	_test_sailing_model(failures)
+	_test_wind_strength_factor(failures)
 	await _test_main_scene_moves_ship(failures)
 	await _test_broadside_side_behavior(failures)
 	await _test_asymmetric_ship_loadout(failures)
@@ -23,12 +25,17 @@ func _run() -> void:
 	await _test_projectile_range_splash(failures)
 	await _test_projectile_range_independent_of_ship_scale(failures)
 	await _test_cannon_hits_target(failures)
+	await _test_armament_damage(failures)
+	await _test_sail_crew_morale_damage(failures)
+	await _test_mast_break_and_crew_limits(failures)
+	await _test_target_ai_test_toggles(failures)
+	await _test_enemy_can_fire_at_player(failures)
 	await _test_fire_status_effects(failures)
 	await _test_magazine_explosion(failures)
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, ship stats/mods, target ship config, ship loadouts, broadside behavior, ammo cooldown, projectile splash, impact flash, burning, self-ignition, magazine explosion, sinking, and target damage.")
+		print("Smoke test passed: sailing, content, ship stats/mods, target ship config, ship loadouts, broadside behavior, enemy fire, ammo cooldown, projectile splash, impact flash, armament damage, sail/crew/morale damage, mast break, crew firing limits, target AI test toggles, burning, self-ignition, magazine explosion, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -68,6 +75,28 @@ func _test_sailing_model(failures: Array[String]) -> void:
 	model.free()
 
 
+func _test_wind_strength_factor(failures: Array[String]) -> void:
+	var wind := WindSystem.new()
+	var conditions := ContentCatalog.load_environment_condition("default_battle")
+	if conditions.is_empty():
+		failures.append("Environment conditions should include default_battle.")
+	else:
+		var wind_record: Dictionary = conditions.get("wind", {})
+		if float(wind_record.get("strength", -1.0)) < 0.0:
+			failures.append("Default battle conditions should define non-negative wind strength.")
+	wind.call("_apply_environment_conditions", conditions)
+	if not is_equal_approx(wind.wind_strength, float(conditions.get("wind", {}).get("strength", wind.wind_strength))):
+		failures.append("WindSystem should load wind strength from environment conditions.")
+	wind.reference_wind_strength = 10.0
+	wind.wind_strength = 5.0
+	if not is_equal_approx(wind.get_wind_speed_factor(), 0.5):
+		failures.append("Wind strength 5 against reference 10 should produce 0.5x speed factor.")
+	wind.wind_strength = 20.0
+	if not is_equal_approx(wind.get_wind_speed_factor(), 1.6):
+		failures.append("Wind speed factor should clamp at the strong-wind cap.")
+	wind.free()
+
+
 func _test_ship_stats(failures: Array[String]) -> void:
 	var ship_types := ContentCatalog.load_ship_types()
 	var modifications := ContentCatalog.load_ship_modifications()
@@ -103,6 +132,10 @@ func _test_ship_stats(failures: Array[String]) -> void:
 	var target_ship_type_id := str(target_record.get("ship_type", ""))
 	if target_stats.get("ship_type_id") != target_ship_type_id:
 		failures.append("Target ship stats should load from target_ship.yaml.")
+	if player_record.has("crew") and not is_equal_approx(float(player_stats.get("starting_crew")), float(player_record.get("crew"))):
+		failures.append("Player starting crew should load from player_ship.yaml crew.")
+	if target_record.has("crew") and not is_equal_approx(float(target_stats.get("starting_crew")), float(target_record.get("crew"))):
+		failures.append("Target starting crew should load from target_ship.yaml crew.")
 	for modification_id in target_record.get("modifications", []):
 		if not target_stats.get("modification_ids").has(str(modification_id)):
 			failures.append("Target ship stats should include configured modification '%s'." % str(modification_id))
@@ -117,6 +150,18 @@ func _test_ship_stats(failures: Array[String]) -> void:
 		failures.append("Sloops should be faster than galleons.")
 	if not float(sloop_sailing.get("turn_rate", 0.0)) > float(galleon_sailing.get("turn_rate", 999.0)):
 		failures.append("Sloops should turn better than galleons.")
+	var brig: Dictionary = ship_types.get("brig", {})
+	var brig_sailing: Dictionary = brig.get("sailing", {})
+	if not float(sloop_sailing.get("acceleration", 0.0)) > float(brig_sailing.get("acceleration", 999.0)):
+		failures.append("Sloops should accelerate faster than brigs.")
+	if not float(sloop_sailing.get("deceleration", 0.0)) > float(brig_sailing.get("deceleration", 999.0)):
+		failures.append("Sloops should shed speed faster than brigs.")
+	if not float(sloop_sailing.get("turn_rate", 0.0)) > float(brig_sailing.get("turn_rate", 999.0)) * 2.0:
+		failures.append("Sloop turn rate should be more than double brig turn rate for a clear nimble feel.")
+	if not float(sloop_sailing.get("minimum_turn_rate", 0.0)) > float(brig_sailing.get("minimum_turn_rate", 999.0)):
+		failures.append("Sloops should retain better low-speed turning than brigs.")
+	if not float(sloop_sailing.get("sail_trim_speed", 0.0)) > float(brig_sailing.get("sail_trim_speed", 999.0)):
+		failures.append("Sloops should trim sails faster than brigs.")
 	if not float(galleon_combat.get("max_hull", 0.0)) > float(sloop_combat.get("max_hull", 999.0)):
 		failures.append("Galleons should have more hull than sloops.")
 
@@ -145,7 +190,7 @@ func _test_ship_stats(failures: Array[String]) -> void:
 
 
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
-	var packed := load(MAIN_SCENE_PATH)
+	var packed := load(NAVAL_BATTLE_SCENE_PATH)
 	if packed == null:
 		failures.append("Could not load main scene.")
 		return
@@ -158,6 +203,7 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	root.add_child(scene)
 	await process_frame
 	await physics_frame
+	_disable_target_ai(scene)
 
 	var ship := scene.get_node_or_null("PlayerShip") as Node3D
 	var wind := scene.get_node_or_null("WindSystem")
@@ -174,6 +220,15 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Main scene does not contain TargetShip.")
 		scene.queue_free()
 		return
+	var ocean := scene.get_node_or_null("Ocean") as MeshInstance3D
+	if ocean == null:
+		failures.append("Main scene does not contain Ocean.")
+	else:
+		var player_hull_for_waterline := ship.get_node_or_null("Hull") as MeshInstance3D
+		if player_hull_for_waterline:
+			var hull_top := player_hull_for_waterline.global_position.y + player_hull_for_waterline.mesh.get_aabb().size.y * ship.scale.y * 0.5
+			if ocean.global_position.y >= hull_top:
+				failures.append("Ocean surface should not cover the top of the player hull.")
 	var player_stats: Resource = ContentCatalog.load_player_ship_stats()
 	var target_stats: Resource = ContentCatalog.load_target_ship_stats()
 	if not is_equal_approx(ship.scale.x, float(player_stats.get("visual_scale"))):
@@ -196,8 +251,30 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	else:
 		var player_hull_size: Vector3 = player_hull.mesh.get_aabb().size
 		var target_hull_size: Vector3 = target_hull.mesh.get_aabb().size
-		if not player_hull_size.is_equal_approx(target_hull_size):
+		if player_stats.get("ship_type_id") == target_stats.get("ship_type_id") and not player_hull_size.is_equal_approx(target_hull_size):
 			failures.append("Same-type player and target ships should start from matching base hull dimensions.")
+		if player_bow.rotation_degrees.length() > 0.001 or target_bow.rotation_degrees.length() > 0.001:
+			failures.append("Generated bow meshes should point forward without scene-level rotation hacks.")
+	var player_visuals := ship.get_node_or_null("ShipVisualBuilder/GeneratedVisuals")
+	var target_visuals := target.get_node_or_null("ShipVisualBuilder/GeneratedVisuals")
+	if player_visuals == null or _count_children_with_prefix(player_visuals, "Flag_") <= 0:
+		failures.append("Player generated visuals should include at least one visible flag node.")
+	else:
+		var player_flag := _get_child_with_prefix(player_visuals, "Flag_") as MeshInstance3D
+		if player_flag == null or player_flag.mesh.get_aabb().size.x < 1.0:
+			failures.append("Player flag should be large enough to read from the battle camera.")
+		elif player_flag.material_override == null or player_flag.material_override.get("albedo_texture") == null:
+			failures.append("Player flag should use a generated emblem texture.")
+		elif not _mesh_has_uvs(player_flag.mesh):
+			failures.append("Player flag mesh should include UVs so generated emblems render.")
+	if target_visuals == null or _count_children_with_prefix(target_visuals, "Flag_") <= 0:
+		failures.append("Target generated visuals should include at least one visible flag node.")
+	else:
+		var target_flag := _get_child_with_prefix(target_visuals, "Flag_") as MeshInstance3D
+		if target_flag == null or target_flag.material_override == null or target_flag.material_override.get("albedo_texture") == null:
+			failures.append("Target flag should use a generated emblem texture.")
+		elif not _mesh_has_uvs(target_flag.mesh):
+			failures.append("Target flag mesh should include UVs so generated emblems render.")
 
 	wind.set("wind_direction_degrees", 180.0)
 	var start_position := ship.global_position
@@ -215,7 +292,7 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 
 
 func _test_cannon_hits_target(failures: Array[String]) -> void:
-	var packed := load(MAIN_SCENE_PATH)
+	var packed := load(NAVAL_BATTLE_SCENE_PATH)
 	if packed == null:
 		failures.append("Could not load main scene for cannon test.")
 		return
@@ -228,6 +305,7 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 	root.add_child(scene)
 	await process_frame
 	await physics_frame
+	_disable_target_ai(scene)
 
 	var ship := scene.get_node_or_null("PlayerShip") as Node3D
 	var target := scene.get_node_or_null("TargetShip")
@@ -239,6 +317,9 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 		failures.append("Cannon test could not find TargetShip.")
 		_free_scene(scene)
 		return
+	target.set("movement_enabled", false)
+	target.global_position = Vector3(18.0, 0.0, 0.0)
+	target.rotation_degrees = Vector3.ZERO
 
 	var broadside := ship.get_node_or_null("BroadsideController")
 	if broadside == null:
@@ -263,6 +344,171 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 		failures.append("Target hull did not decrease after starboard broadside. Start: %.2f End: %.2f" % [starting_hull, ending_hull])
 	if not saw_impact:
 		failures.append("Cannon hit should spawn an impact flash.")
+
+	_free_scene(scene)
+
+
+func _test_armament_damage(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "armament damage")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var target := scene.get_node_or_null("TargetShip")
+	var broadside := _get_broadside(scene, failures)
+	if ship == null or target == null or broadside == null:
+		_free_scene(scene)
+		return
+
+	var forced_ordnance_damage := {
+		"cannon_disable_chance": 1.0,
+		"gun_port_disable_chance": 1.0
+	}
+	target.call("apply_projectile_hit", 0.0, {}, forced_ordnance_damage, target.to_global(Vector3(1.0, 0.4, 0.0)))
+	await process_frame
+	if int(target.call("get_disabled_cannon_count", 1)) != 1:
+		failures.append("A forced starboard ordnance hit should disable one target cannon.")
+	if int(target.call("get_disabled_gun_port_count", 1)) != 1:
+		failures.append("A forced starboard ordnance hit should disable one target gun port.")
+
+	var original_firing_count: int = broadside.call("_get_side_firing_cannons", 1).size()
+	ship.set("disabled_cannons", {"port": 0, "starboard": 1})
+	ship.set("disabled_gun_ports", {"port": 0, "starboard": 1})
+	var reduced_firing_count: int = broadside.call("_get_side_firing_cannons", 1).size()
+	if not reduced_firing_count < original_firing_count:
+		failures.append("Disabled player cannons and gun ports should reduce starboard firing cannon count.")
+
+	_free_scene(scene)
+
+
+func _test_sail_crew_morale_damage(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "sail crew morale damage")
+	if scene == null:
+		return
+
+	var target := scene.get_node_or_null("TargetShip")
+	if target == null:
+		failures.append("Sail/crew/morale damage test could not find TargetShip.")
+		_free_scene(scene)
+		return
+
+	var starting_hull: float = target.get("hull")
+	var starting_sail: float = target.get("sail")
+	var starting_crew: float = target.get("crew")
+	var starting_morale: float = target.get("morale")
+	var forced_damage := {
+		"sail_damage": 11.0,
+		"crew_damage": 7.0,
+		"morale_damage": 5.0
+	}
+	target.call("apply_projectile_hit", 0.0, {}, forced_damage, target.to_global(Vector3(1.0, 0.4, 0.0)))
+	await process_frame
+
+	if target.get("hull") != starting_hull:
+		failures.append("Sail/crew/morale damage should not change hull when hull damage is zero.")
+	if not is_equal_approx(float(target.get("sail")), starting_sail - 11.0):
+		failures.append("Projectile context should apply sail damage.")
+	if not is_equal_approx(float(target.get("crew")), starting_crew - 7.0):
+		failures.append("Projectile context should apply crew damage.")
+	if not is_equal_approx(float(target.get("morale")), starting_morale - 5.0):
+		failures.append("Projectile context should apply morale damage.")
+
+	target.call("apply_sail_damage", 9999.0)
+	target.call("apply_crew_damage", 9999.0)
+	target.call("apply_morale_damage", 9999.0)
+	if target.get("sail") != 0.0 or target.get("crew") != 0.0 or target.get("morale") != 0.0:
+		failures.append("Sail, crew, and morale damage should clamp at zero.")
+
+	_free_scene(scene)
+
+
+func _test_mast_break_and_crew_limits(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "mast break and crew limits")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var target := scene.get_node_or_null("TargetShip") as Node3D
+	var broadside := _get_broadside(scene, failures)
+	if ship == null or target == null or broadside == null:
+		_free_scene(scene)
+		return
+
+	var starting_position := target.global_position
+	target.call("apply_sail_damage", 9999.0)
+	await process_frame
+	if not bool(target.get("is_mast_broken")):
+		failures.append("Reducing sail health to zero should break the target mast.")
+	if target.get("sail") != 0.0:
+		failures.append("Breaking the mast should clamp sail health to zero.")
+	for index in range(45):
+		await physics_frame
+	if target.global_position.distance_to(starting_position) > 0.1:
+		failures.append("A ship with a broken mast should not continue sailing under wind.")
+
+	var full_count: int = broadside.call("_get_side_firing_cannons", 1).size()
+	ship.set("crew", 5.0)
+	var reduced_count: int = broadside.call("_get_side_firing_cannons", 1).size()
+	if full_count <= 1:
+		failures.append("Crew limit test needs a player broadside with more than one available cannon.")
+	if reduced_count != 1:
+		failures.append("Five crew should only support one active cannon at three crew per cannon. Saw %d." % reduced_count)
+
+	_free_scene(scene)
+
+
+func _test_target_ai_test_toggles(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "target AI test toggles")
+	if scene == null:
+		return
+
+	var target := scene.get_node_or_null("TargetShip") as Node3D
+	if target == null:
+		failures.append("Target AI toggle test could not find TargetShip.")
+		_free_scene(scene)
+		return
+
+	target.set("ai_enabled", false)
+	target.set("movement_enabled", false)
+	target.set("firing_enabled", false)
+	var start_position := target.global_position
+	for index in range(90):
+		await physics_frame
+	if target.global_position.distance_to(start_position) > 0.05:
+		failures.append("Target should remain stationary when movement_enabled is false.")
+
+	_free_scene(scene)
+
+
+func _test_enemy_can_fire_at_player(failures: Array[String]) -> void:
+	var scene := await _instantiate_main_scene(failures, "enemy fire")
+	if scene == null:
+		return
+
+	var ship := scene.get_node_or_null("PlayerShip") as Node3D
+	var target := scene.get_node_or_null("TargetShip") as Node3D
+	if ship == null or target == null:
+		failures.append("Enemy fire test needs PlayerShip and TargetShip.")
+		_free_scene(scene)
+		return
+
+	var wind := scene.get_node_or_null("WindSystem")
+	if wind:
+		wind.set("wind_strength", 0.0)
+	ship.global_position = Vector3.ZERO
+	ship.set_physics_process(false)
+	target.global_position = Vector3(18.0, 0.0, 0.0)
+	target.rotation_degrees = Vector3.ZERO
+	target.set("ai_enabled", true)
+	target.set("movement_enabled", false)
+	target.set("firing_enabled", true)
+	target.set("initial_firing_delay", 0.0)
+	target.set("aim_commit_time", 0.0)
+	var starting_hull: float = ship.get("hull")
+	for index in range(300):
+		await physics_frame
+	if float(ship.get("hull")) >= starting_hull:
+		failures.append("Enemy AI should be able to fire a broadside that damages the player.")
 
 	_free_scene(scene)
 
@@ -627,7 +873,7 @@ func _test_magazine_explosion(failures: Array[String]) -> void:
 
 
 func _instantiate_main_scene(failures: Array[String], test_name: String) -> Node:
-	var packed := load(MAIN_SCENE_PATH)
+	var packed := load(NAVAL_BATTLE_SCENE_PATH)
 	if packed == null:
 		failures.append("Could not load main scene for %s test." % test_name)
 		return null
@@ -640,6 +886,7 @@ func _instantiate_main_scene(failures: Array[String], test_name: String) -> Node
 	root.add_child(scene)
 	await process_frame
 	await physics_frame
+	_disable_target_ai(scene)
 	return scene
 
 
@@ -665,3 +912,33 @@ func _get_child_named(scene: Node, child_name: String) -> Node:
 		if child.name == child_name or child.name.begins_with("%s@" % child_name):
 			return child
 	return null
+
+
+func _count_children_with_prefix(node: Node, prefix: String) -> int:
+	var count := 0
+	for child in node.get_children():
+		if child.name.begins_with(prefix):
+			count += 1
+	return count
+
+
+func _get_child_with_prefix(node: Node, prefix: String) -> Node:
+	for child in node.get_children():
+		if child.name.begins_with(prefix):
+			return child
+	return null
+
+
+func _mesh_has_uvs(mesh: Mesh) -> bool:
+	if mesh == null or mesh.get_surface_count() <= 0:
+		return false
+	var arrays := mesh.surface_get_arrays(0)
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	return uvs.size() > 0
+
+
+func _disable_target_ai(scene: Node) -> void:
+	var target := scene.get_node_or_null("TargetShip")
+	if target:
+		target.set("ai_enabled", false)
+		target.set("firing_enabled", false)

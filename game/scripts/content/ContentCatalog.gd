@@ -5,8 +5,12 @@ const AMMO_TYPES_PATH := "res://data/cannons/ammo_types.yaml"
 const STATUS_EFFECTS_PATH := "res://data/combat/status_effects.yaml"
 const SHIP_TYPES_PATH := "res://data/ships/ship_types.yaml"
 const SHIP_MODIFICATIONS_PATH := "res://data/ships/ship_modifications.yaml"
+const SHIP_VISUAL_PROFILES_PATH := "res://data/ships/ship_visual_profiles.yaml"
 const PLAYER_SHIP_PATH := "res://data/ships/player_ship.yaml"
 const TARGET_SHIP_PATH := "res://data/ships/target_ship.yaml"
+const FACTIONS_PATH := "res://data/factions/factions.yaml"
+const FLAGS_PATH := "res://data/visuals/flags.yaml"
+const ENVIRONMENT_CONDITIONS_PATH := "res://data/environment/environment_conditions.yaml"
 const CANNON_TYPE_SCRIPT := preload("res://game/scripts/content/CannonType.gd")
 const AMMO_TYPE_SCRIPT := preload("res://game/scripts/content/AmmoType.gd")
 const SHIP_STATS_SCRIPT := preload("res://game/scripts/content/ShipStats.gd")
@@ -42,6 +46,8 @@ static func load_ammo_types() -> Dictionary:
 		ammo.set("sail_damage", float(damage.get("sail", 0.0)))
 		ammo.set("crew_damage", float(damage.get("crew", 0.0)))
 		ammo.set("morale_damage", float(damage.get("morale", 0.0)))
+		ammo.set("cannon_disable_chance", float(damage.get("cannon_disable_chance", 0.0)))
+		ammo.set("gun_port_disable_chance", float(damage.get("gun_port_disable_chance", 0.0)))
 		ammo.set("status_effects", record.get("status_effects", {}))
 		if not ammo.get("id").is_empty():
 			catalog[ammo.get("id")] = ammo
@@ -58,6 +64,10 @@ static func load_ship_type_records() -> Array[Dictionary]:
 
 static func load_ship_modification_records() -> Array[Dictionary]:
 	return _load_yaml_records(SHIP_MODIFICATIONS_PATH, "ship_modifications")
+
+
+static func load_ship_visual_profile_records() -> Array[Dictionary]:
+	return _load_yaml_records(SHIP_VISUAL_PROFILES_PATH, "ship_visual_profiles")
 
 
 static func load_ship_types() -> Dictionary:
@@ -77,6 +87,59 @@ static func load_ship_modifications() -> Dictionary:
 			catalog[id] = record
 	return catalog
 
+
+static func load_ship_visual_profiles() -> Dictionary:
+	var catalog := {}
+	for record in load_ship_visual_profile_records():
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
+static func load_faction_records() -> Array[Dictionary]:
+	return _load_yaml_records(FACTIONS_PATH, "factions")
+
+
+static func load_factions() -> Dictionary:
+	var catalog := {}
+	for record in load_faction_records():
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
+static func load_flag_records() -> Array[Dictionary]:
+	return _load_yaml_records(FLAGS_PATH, "flags")
+
+
+static func load_flags() -> Dictionary:
+	var catalog := {}
+	for record in load_flag_records():
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
+static func load_environment_condition_records() -> Array[Dictionary]:
+	return _load_yaml_records(ENVIRONMENT_CONDITIONS_PATH, "environment_conditions")
+
+
+static func load_environment_conditions() -> Dictionary:
+	var catalog := {}
+	for record in load_environment_condition_records():
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
+static func load_environment_condition(condition_id: String = "default_battle") -> Dictionary:
+	var conditions := load_environment_conditions()
+	return conditions.get(condition_id, conditions.get("default_battle", {}))
+	
 
 static func load_fire_levels() -> Dictionary:
 	var catalog := {}
@@ -104,11 +167,18 @@ static func build_ship_stats(ship_record: Dictionary, ship_types: Dictionary, sh
 	stats.set("ship_type_id", ship_type_id)
 	stats.set("display_name", str(ship_type.get("name", ship_type_id)))
 	stats.set("visual_scale", float(ship_type.get("visual_scale", 1.0)))
+	stats.set("visual_profile_id", str(ship_type.get("visual_profile", "%s_basic" % ship_type_id)))
 	stats.set("max_speed", float(sailing.get("max_speed", 9.0)))
 	stats.set("acceleration", float(sailing.get("acceleration", 3.8)))
 	stats.set("deceleration", float(sailing.get("deceleration", 2.6)))
 	stats.set("turn_rate", float(sailing.get("turn_rate", 70.0)))
+	stats.set("minimum_turn_rate", float(sailing.get("minimum_turn_rate", 18.0)))
+	stats.set("sail_trim_speed", float(sailing.get("sail_trim_speed", 0.65)))
 	stats.set("max_hull", float(combat.get("max_hull", 80.0)))
+	stats.set("max_sail", float(combat.get("max_sail", combat.get("max_hull", 80.0))))
+	stats.set("max_crew", float(combat.get("max_crew", 80.0)))
+	stats.set("starting_crew", clampf(float(ship_record.get("crew", stats.get("max_crew"))), 0.0, float(stats.get("max_crew"))))
+	stats.set("max_morale", float(combat.get("max_morale", 100.0)))
 	stats.set("magazine_explosion_multiplier", float(combat.get("magazine_explosion_multiplier", 1.0)))
 	stats.set("usable_load_capacity", float(combat.get("usable_load_capacity", 90.0)))
 	stats.set("gun_ports", int(combat.get("gun_ports", 14)))
@@ -165,6 +235,10 @@ static func _apply_ship_modification(stats: Resource, modification: Dictionary) 
 		stats.set("deceleration", float(stats.get("deceleration")) * float(sailing.get("deceleration_multiplier")))
 	if sailing.has("turn_rate_multiplier"):
 		stats.set("turn_rate", float(stats.get("turn_rate")) * float(sailing.get("turn_rate_multiplier")))
+	if sailing.has("minimum_turn_rate_multiplier"):
+		stats.set("minimum_turn_rate", float(stats.get("minimum_turn_rate")) * float(sailing.get("minimum_turn_rate_multiplier")))
+	if sailing.has("sail_trim_speed_multiplier"):
+		stats.set("sail_trim_speed", float(stats.get("sail_trim_speed")) * float(sailing.get("sail_trim_speed_multiplier")))
 	if combat.has("max_hull_multiplier"):
 		stats.set("max_hull", float(stats.get("max_hull")) * float(combat.get("max_hull_multiplier")))
 	if combat.has("magazine_explosion_multiplier"):
@@ -283,6 +357,9 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 
 	var root: Dictionary = {
 		"ship_type": "",
+		"faction": "pirates",
+		"visual_variant": "",
+		"sail_set": "full",
 		"cargo_weight": 0.0,
 		"modifications": [],
 		"broadsides": {
@@ -319,6 +396,22 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 			root["ship_type"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
 			in_cannons = false
+		elif line.begins_with("faction:"):
+			root["faction"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("visual_variant:"):
+			root["visual_variant"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("sail_set:"):
+			root["sail_set"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("crew:"):
+			root["crew"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
 		elif line.begins_with("cargo_weight:"):
 			root["cargo_weight"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
@@ -346,11 +439,20 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 
 	var root: Dictionary = {
 		"ship_type": "",
+		"faction": "spain",
+		"visual_variant": "",
+		"sail_set": "full",
 		"cargo_weight": 0.0,
-		"modifications": []
+		"modifications": [],
+		"broadsides": {
+			"port": {"cannons": []},
+			"starboard": {"cannons": []}
+		}
 	}
 	var in_root := false
 	var in_modifications := false
+	var current_side := ""
+	var in_cannons := false
 
 	while not file.eof_reached():
 		var raw_line := file.get_line()
@@ -361,21 +463,52 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 		if not raw_line.begins_with(" "):
 			in_root = line == "%s:" % root_key
 			in_modifications = false
+			current_side = ""
+			in_cannons = false
 			continue
 
 		if not in_root:
 			continue
 
-		if line.begins_with("ship_type:"):
+		if line == "port:" or line == "starboard:":
+			current_side = line.trim_suffix(":")
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("ship_type:"):
 			root["ship_type"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("faction:"):
+			root["faction"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("visual_variant:"):
+			root["visual_variant"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("sail_set:"):
+			root["sail_set"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
+		elif line.begins_with("crew:"):
+			root["crew"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_modifications = false
+			in_cannons = false
 		elif line.begins_with("cargo_weight:"):
 			root["cargo_weight"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_modifications = false
+			in_cannons = false
 		elif line == "modifications:":
 			in_modifications = true
+			in_cannons = false
+			current_side = ""
+		elif line == "cannons:" and not current_side.is_empty():
+			in_cannons = true
+			in_modifications = false
 		elif line.begins_with("- ") and in_modifications:
 			root.modifications.append(_parse_scalar(line.substr(2).strip_edges()))
+		elif line.begins_with("- ") and in_cannons and not current_side.is_empty():
+			root.broadsides[current_side].cannons.append(_parse_scalar(line.substr(2).strip_edges()))
 
 	return root
 
