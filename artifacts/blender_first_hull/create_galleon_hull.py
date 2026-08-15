@@ -3,7 +3,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 OUT_DIR = Path(__file__).resolve().parent
@@ -302,16 +302,22 @@ def add_hull_side_box(name, side, z, t, size, material, offset=0.055, bevel=0.0)
     return add_cube(name, (x, y, z), size, material, bevel)
 
 
-def add_side_gunport(name, side, z, t, materials, size=0.16, offset=0.060):
+def add_side_gunport(name, side, z, t, materials, size=0.16):
     gold = materials["gold"]
     red = materials["red_paint"]
     black = materials["black"]
-    x, y, _ = side_point(z, side, t, offset)
-    add_cube(f"{name}_wood_recess", (x - side * 0.010, y, z), (0.036, size * 1.14, size * 1.26), materials["dark_wood"], 0.006)
-    add_cube(f"{name}_structural_lintel", (x - side * 0.004, y + size * 0.55, z), (0.030, 0.024, size * 1.22), gold, 0.004)
-    add_cube(f"{name}_structural_sill", (x - side * 0.004, y - size * 0.55, z), (0.030, 0.024, size * 1.22), gold, 0.004)
-    add_cube(f"{name}_red_reveal", (x, y, z), (0.036, size * 0.82, size * 0.90), red, 0.006)
-    add_cube(f"{name}_dark_port", (x + side * 0.010, y, z), (0.042, size * 0.46, size * 0.54), black, 0.003)
+    dark = materials["dark_wood"]
+    # The whole assembly is oriented to the local hull skin and hugs it, so the
+    # port reads as recessed into the planking instead of pasted proud of it:
+    # a dark cut ring at the surface, a thin wood architrave just proud of the
+    # ring, then reveal/port faces stacked barely above that.
+    frame = hull_surface_frame(z, side, t)
+    add_surface_cube(f"{name}_shadow_cut_ring", frame, (0.000, 0.0, 0.0), (0.020, size * 1.42, size * 1.52), black, 0.003)
+    add_surface_cube(f"{name}_wood_recess", frame, (0.005, 0.0, 0.0), (0.030, size * 1.14, size * 1.26), dark, 0.006)
+    add_surface_cube(f"{name}_structural_lintel", frame, (0.016, size * 0.62, 0.0), (0.020, 0.024, size * 1.34), gold, 0.004)
+    add_surface_cube(f"{name}_structural_sill", frame, (0.016, -size * 0.62, 0.0), (0.020, 0.024, size * 1.34), gold, 0.004)
+    add_surface_cube(f"{name}_red_reveal", frame, (0.013, 0.0, 0.0), (0.022, size * 0.82, size * 0.90), red, 0.006)
+    add_surface_cube(f"{name}_dark_port", frame, (0.021, 0.0, 0.0), (0.016, size * 0.46, size * 0.54), black, 0.003)
 
 
 def add_shaped_deck(name, z_values, materials, t=0.985, inset=0.020, lift=0.050):
@@ -420,46 +426,61 @@ def add_stern_stairs(side, materials):
         gold,
     )
 
-    add_polyline(
-        f"stern_stair_curved_outer_wood_handrail_{side}",
-        [(side * (x_abs + width * 0.50), y + 0.15, z) for x_abs, y, z, width in steps],
-        0.026,
-        dark,
-    )
-    add_polyline(
-        f"stern_stair_curved_inner_wood_handrail_{side}",
-        [(side * (x_abs - width * 0.48), y + 0.12, z) for x_abs, y, z, width in steps],
-        0.022,
-        dark,
-    )
+    # Handrails start on a bottom newel, ride balusters planted in every tread,
+    # and run on aft to hand off to the balcony rail at the stair opening.
+    outer_rail_pts = [(side * (x_abs + width * 0.50), y + 0.15, z) for x_abs, y, z, width in steps]
+    outer_rail_pts.append((side * 0.70, 1.955, 1.86))
+    add_polyline(f"stern_stair_curved_outer_wood_handrail_{side}", outer_rail_pts, 0.026, dark)
+    inner_rail_pts = [(side * (x_abs - width * 0.48), y + 0.12, z) for x_abs, y, z, width in steps]
+    inner_rail_pts.append((side * 0.40, 1.945, 1.85))
+    add_polyline(f"stern_stair_curved_inner_wood_handrail_{side}", inner_rail_pts, 0.022, dark)
     add_polyline(
         f"stern_stair_gold_handrail_face_{side}",
-        [(side * (x_abs + width * 0.50), y + 0.18, z) for x_abs, y, z, width in steps],
+        [(x, y + 0.030, z) for x, y, z in outer_rail_pts],
         0.007,
         gold,
     )
-    add_cube(f"stern_stair_recessed_level_landing_{side}", (side * 0.52, 1.68, 1.98), (0.40, 0.070, 0.34), dark, 0.014)
-    add_cube(f"stern_stair_landing_gold_nose_{side}", (side * 0.52, 1.725, 1.82), (0.36, 0.014, 0.030), gold, 0.004)
-    add_cube(f"stern_stair_landing_inner_block_{side}", (side * 0.38, 1.64, 2.08), (0.12, 0.052, 0.16), dark, 0.010)
+    for i, (x_abs, y, z, width) in enumerate(steps):
+        outer_x = side * (x_abs + width * 0.50)
+        inner_x = side * (x_abs - width * 0.48)
+        add_cylinder_between(f"stern_stair_outer_baluster_{side}_{i}", (outer_x, y + 0.028, z), (outer_x, y + 0.15, z), 0.011, dark, 8)
+        add_cylinder_between(f"stern_stair_inner_baluster_{side}_{i}", (inner_x, y + 0.028, z), (inner_x, y + 0.12, z), 0.010, dark, 8)
+    x0_abs, y0, z0, w0 = steps[0]
+    newel_x = side * (x0_abs + w0 * 0.50)
+    add_cylinder_between(f"stern_stair_bottom_newel_{side}", (newel_x, y0 - 0.14, z0), (newel_x, y0 + 0.17, z0), 0.020, dark, 10)
+    add_ellipsoid(f"stern_stair_bottom_newel_gold_cap_{side}", (newel_x, y0 + 0.185, z0), (0.020, 0.014, 0.020), gold, 10, 4)
 
 
-def add_stern_second_level_rail(materials):
+def add_second_level_balcony(materials):
     dark = materials["dark_wood"]
     gold = materials["gold"]
+    wood = materials["wood"]
+    # A distinct railed balcony across the sterncastle's second level: an
+    # overhanging plank deck on knee brackets with a perimeter rail. The stair
+    # handrails hand off to the outer rail at the side openings, so the fall
+    # barrier is continuous from deck bulwark to stair to balcony.
+    add_cube("Balcony_second_level_plank_deck", (0, 1.685, 2.00), (1.44, 0.050, 0.34), wood, 0.010)
+    add_cube("Balcony_front_gold_nosing", (0, 1.716, 1.842), (1.40, 0.014, 0.026), gold, 0.004)
+    add_cube("Balcony_front_dark_fascia", (0, 1.60, 1.855), (1.42, 0.125, 0.035), dark, 0.010)
     for side in (-1, 1):
-        post_points = [
-            (side * 0.64, 1.66, 1.84),
-            (side * 0.60, 1.66, 2.02),
-            (side * 0.55, 1.66, 2.20),
-            (side * 0.48, 1.66, 2.36),
-        ]
-        for i, (x, y, z) in enumerate(post_points):
-            add_cylinder_between(f"stern_second_level_rail_post_{side}_{i}", (x, y, z), (x, y + 0.24, z), 0.020, dark, 10)
-            add_ellipsoid(f"stern_second_level_rail_gold_cap_{side}_{i}", (x, y + 0.255, z), (0.018, 0.012, 0.018), gold, 10, 4)
-        top = [(x, y + 0.24, z) for x, y, z in post_points]
-        mid = [(x, y + 0.12, z) for x, y, z in post_points]
-        add_polyline(f"stern_second_level_top_rail_{side}", top, 0.026, dark)
-        add_polyline(f"stern_second_level_mid_rail_{side}", mid, 0.015, dark)
+        add_cube(f"Balcony_side_dark_fascia_{side}", (side * 0.685, 1.60, 2.005), (0.055, 0.125, 0.325), dark, 0.010)
+        for z in (1.92, 2.10):
+            add_cylinder_between(f"Balcony_knee_bracket_{side}_{z}", (side * 0.485, 1.46, z), (side * 0.665, 1.645, z), 0.020, dark, 8)
+        for i, (x, z) in enumerate([(side * 0.70, 1.86), (side * 0.70, 2.13)]):
+            add_cylinder_between(f"Balcony_outer_rail_post_{side}_{i}", (x, 1.700, z), (x, 1.955, z), 0.020, dark, 10)
+            add_ellipsoid(f"Balcony_outer_rail_gold_cap_{side}_{i}", (x, 1.970, z), (0.018, 0.012, 0.018), gold, 10, 4)
+        # Outer rail runs aft along the balcony edge, then returns into the
+        # castle wall so nobody can slip off behind it.
+        outer_top = [(side * 0.70, 1.955, 1.86), (side * 0.70, 1.955, 2.13), (side * 0.30, 1.955, 2.22)]
+        outer_mid = [(side * 0.70, 1.835, 1.86), (side * 0.70, 1.835, 2.13), (side * 0.30, 1.835, 2.22)]
+        add_polyline(f"Balcony_outer_top_rail_{side}", outer_top, 0.024, dark)
+        add_polyline(f"Balcony_outer_mid_rail_{side}", outer_mid, 0.014, dark)
+    # Front rail between the two stair openings guards the drop to the deck.
+    for x in (-0.40, -0.13, 0.13, 0.40):
+        add_cylinder_between(f"Balcony_front_rail_post_{x}", (x, 1.700, 1.85), (x, 1.955, 1.85), 0.018, dark, 10)
+        add_ellipsoid(f"Balcony_front_rail_gold_cap_{x}", (x, 1.970, 1.85), (0.016, 0.011, 0.016), gold, 10, 4)
+    add_polyline("Balcony_front_top_rail", [(-0.40, 1.955, 1.85), (0.40, 1.955, 1.85)], 0.024, dark)
+    add_polyline("Balcony_front_mid_rail", [(-0.40, 1.835, 1.85), (0.40, 1.835, 1.85)], 0.014, dark)
 
 
 def add_stern_side_window(name, side, loc, size, materials):
@@ -526,6 +547,10 @@ def add_sterncastle_anchor(materials):
     add_cube("Sterncastle_gold_contact_trim", (0, 1.33, 2.05), (0.96, 0.020, 0.42), gold, 0.005)
     for side in (-1, 1):
         add_cube(f"Sterncastle_side_deep_attachment_wall_{side}", (side * 0.48, 1.23, 2.04), (0.080, 0.44, 0.42), dark, 0.022)
+    # Stern counter: fairs the hull's rising stern top into the transom base so
+    # the castle reads as growing out of the hull instead of hovering behind it.
+    add_tapered_box("Sterncastle_stern_counter_fairing", (0, 1.02, 2.52), 1.06, 1.16, 0.24, 0.36, red, 0.028)
+    add_cube("Sterncastle_counter_shadow_tuck", (0, 0.89, 2.48), (1.02, 0.040, 0.30), black, 0.010)
 
 
 def add_mast_stub(name, z, height, radius, materials):
@@ -578,6 +603,64 @@ def side_point(z, side, t, offset=0.0):
     beam = half_width * (math.sin(t * math.pi * 0.5) ** 0.58)
     tumblehome = 1.0 - max(0.0, t - 0.72) * 0.28
     return (side * (beam * tumblehome + offset), y, z)
+
+
+def hull_mesh_point(z, side, t):
+    # Exact point on the create_hull skin (pre-bevel): replicates the station
+    # vertex math, including the per-station sheer softener, and interpolates
+    # linearly between stations the same way the mesh faces do.
+    stations = station_profile()
+
+    def station_vert(si):
+        sz, half_width, deck_y, keel_y = stations[si]
+        y = keel_y + (deck_y - keel_y) * t
+        beam = half_width * (math.sin(t * math.pi * 0.5) ** 0.66)
+        tumblehome = 1.0 - max(0.0, t - 0.70) * 0.34
+        softener = 1.0 - 0.05 * math.cos((sz + 0.25) * math.pi)
+        z_raked = sz
+        if si == len(stations) - 1:
+            z_raked = sz + 0.50 * (1.0 - t) - 0.18 * t
+        elif si == len(stations) - 2:
+            z_raked = sz + 0.18 * (1.0 - t) - 0.06 * t
+        return Vector((side * beam * tumblehome * softener, y, z_raked))
+
+    lo, hi = 0, len(stations) - 1
+    for i in range(len(stations) - 1):
+        if stations[i][0] >= z >= stations[i + 1][0]:
+            lo, hi = i, i + 1
+            break
+    a = station_vert(lo)
+    b = station_vert(hi)
+    span = a.z - b.z
+    f = 0.0 if span == 0 else (a.z - z) / span
+    return a + (b - a) * min(max(f, 0.0), 1.0)
+
+
+def hull_surface_frame(z, side, t):
+    # Local frame on the hull skin: origin on the surface, e_x the outboard
+    # surface normal, e_y up along the skin, e_z along the hull run.
+    p0 = hull_mesh_point(z, side, t)
+    dz = hull_mesh_point(z + 0.05, side, t) - hull_mesh_point(z - 0.05, side, t)
+    t_lo = max(t - 0.05, 0.02)
+    t_hi = min(t + 0.05, 0.995)
+    dt = hull_mesh_point(z, side, t_hi) - hull_mesh_point(z, side, t_lo)
+    normal = dz.cross(dt)
+    if normal.x * side < 0:
+        normal = -normal
+    e_x = normal.normalized()
+    e_y = (dt - dt.project(e_x)).normalized()
+    e_z = e_x.cross(e_y)
+    return p0 + e_x * 0.003, e_x, e_y, e_z
+
+
+def add_surface_cube(name, frame, local_offset, size, material, bevel=0.0):
+    # A cube oriented to a hull_surface_frame: local x runs outboard along the
+    # surface normal, y up the skin, z along the hull.
+    origin, e_x, e_y, e_z = frame
+    loc = origin + e_x * local_offset[0] + e_y * local_offset[1] + e_z * local_offset[2]
+    obj = add_cube(name, tuple(loc), size, material, bevel)
+    obj.rotation_euler = Matrix((e_x, e_y, e_z)).transposed().to_euler()
+    return obj
 
 
 def create_hull(materials):
@@ -657,7 +740,9 @@ def decorate_hull(materials):
             add_polyline(f"gold_hull_sheer_{side}_{t:.2f}", pts, radius, gold)
 
     # Deck insert, red gun band, and raised castles.
-    deck_z = [2.34, 1.96, 1.58, 1.20, 0.82, 0.44, 0.06, -0.32, -0.70, -1.08, -1.46, -1.84, -2.22, -2.58]
+    # Runs all the way aft under the sterncastle so top-down views never see
+    # into the open hull shell beside the castle walls.
+    deck_z = [2.62, 2.48, 2.34, 1.96, 1.58, 1.20, 0.82, 0.44, 0.06, -0.32, -0.70, -1.08, -1.46, -1.84, -2.22, -2.58]
     add_shaped_deck("Deck_shaped_to_hull_planks", deck_z, materials)
     add_cube("Deck_central_hatch_frame", (0, 1.105, 0.42), (0.46, 0.055, 0.34), dark, 0.018)
     add_cube("Deck_central_hatch_recess", (0, 1.138, 0.42), (0.34, 0.028, 0.24), materials["black"], 0.010)
@@ -695,34 +780,33 @@ def decorate_hull(materials):
     add_cube("Sterncastle_front_dark_contact_foot", (0, 1.01, 1.62), (1.00, 0.055, 0.14), dark, 0.012)
     add_stern_gallery_tier(
         "Sterncastle_lower_curved_transom_gallery",
-        1.12, 1.56, 1.72, 2.52,
-        1.08, 1.22, 0.98, 1.10,
+        1.02, 1.56, 1.72, 2.66,
+        1.08, 1.16, 0.98, 1.08,
         red, 0.035,
     )
     add_cube("Sterncastle_lower_internal_floor_band", (0, 1.56, 2.14), (0.98, 0.060, 0.38), dark, 0.016)
     add_cube("Sterncastle_lower_gold_gallery_sill", (0, 1.16, 2.14), (0.88, 0.022, 0.36), gold, 0.006)
-    add_cube("Sterncastle_second_level_recessed_walk", (0, 1.62, 2.10), (0.68, 0.052, 0.16), dark, 0.010)
     add_cube("Sterncastle_second_level_dark_support_fascia", (0, 1.58, 2.18), (0.82, 0.085, 0.36), dark, 0.012)
     for x in [-0.34, -0.12, 0.12, 0.34]:
         add_cylinder_between(f"Sterncastle_second_level_short_support_post_{x}", (x, 1.50, 2.26), (x, 1.66, 2.26), 0.018, dark, 10)
     add_stern_gallery_tier(
         "Sterncastle_middle_raked_window_gallery",
-        1.56, 2.42, 2.16, 2.52,
+        1.56, 2.42, 2.16, 2.66,
         0.78, 1.02, 0.66, 0.86,
         red, 0.030,
     )
-    add_stern_second_level_rail(materials)
+    add_second_level_balcony(materials)
     add_cube("Sterncastle_middle_internal_floor_band", (0, 2.03, 2.28), (0.66, 0.044, 0.26), dark, 0.010)
     add_cube("Sterncastle_middle_upper_walk_band", (0, 2.42, 2.28), (0.62, 0.052, 0.24), dark, 0.012)
     add_cube("Sterncastle_middle_gold_sill", (0, 1.65, 2.28), (0.62, 0.018, 0.22), gold, 0.005)
-    add_cube("Sterncastle_upper_captain_gallery_flat_block", (0, 2.58, 2.43), (0.34, 0.24, 0.16), red, 0.026)
-    add_cube("Sterncastle_upper_captain_gallery_front_face", (0, 2.43, 2.35), (0.30, 0.036, 0.018), red, 0.006)
-    add_cube("Sterncastle_upper_internal_cap", (0, 2.72, 2.42), (0.34, 0.060, 0.18), dark, 0.010)
-    add_cube("Sterncastle_roof_dark_wood", (0, 2.80, 2.42), (0.38, 0.076, 0.20), dark, 0.014)
-    add_cube("Sterncastle_subtle_dark_pediment", (0, 2.91, 2.42), (0.24, 0.070, 0.08), dark, 0.010)
-    add_cylinder_between("Sterncastle_top_ornamental_mast", (0, 2.78, 2.40), (0, 3.30, 2.40), 0.040, dark, 16)
-    add_cylinder_between("Sterncastle_top_gold_mast_band", (-0.065, 3.02, 2.40), (0.065, 3.02, 2.40), 0.010, gold, 8)
-    for y, width, depth, zc in [(1.22, 0.86, 0.30, 2.22), (1.74, 0.62, 0.20, 2.32), (2.42, 0.30, 0.12, 2.42)]:
+    add_cube("Sterncastle_upper_captain_gallery_flat_block", (0, 2.58, 2.57), (0.34, 0.24, 0.16), red, 0.026)
+    add_cube("Sterncastle_upper_captain_gallery_front_face", (0, 2.43, 2.49), (0.30, 0.036, 0.018), red, 0.006)
+    add_cube("Sterncastle_upper_internal_cap", (0, 2.72, 2.56), (0.34, 0.060, 0.18), dark, 0.010)
+    add_cube("Sterncastle_roof_dark_wood", (0, 2.80, 2.56), (0.38, 0.076, 0.20), dark, 0.014)
+    add_cube("Sterncastle_subtle_dark_pediment", (0, 2.91, 2.56), (0.24, 0.070, 0.08), dark, 0.010)
+    add_cylinder_between("Sterncastle_top_ornamental_mast", (0, 2.78, 2.54), (0, 3.30, 2.54), 0.040, dark, 16)
+    add_cylinder_between("Sterncastle_top_gold_mast_band", (-0.065, 3.02, 2.54), (0.065, 3.02, 2.54), 0.010, gold, 8)
+    for y, width, depth, zc in [(1.22, 0.86, 0.30, 2.36), (1.74, 0.62, 0.20, 2.46), (2.42, 0.30, 0.12, 2.56)]:
         add_cube(f"stern_gallery_shadowed_undercut_{y}", (0, y, zc), (width, 0.045, depth), materials["black"], 0.012)
 
     # Gun ports with red lips and black interiors.
@@ -730,11 +814,11 @@ def decorate_hull(materials):
     upper_ports = [1.76, 1.30, 0.84, 0.38, -0.08, -0.54, -1.00, -1.46]
     for side in (-1, 1):
         for i, z in enumerate(lower_ports):
-            add_side_gunport(f"lower_gundeck_port_{side}_{i}", side, z, 0.43, materials, size=0.178, offset=0.060)
+            add_side_gunport(f"lower_gundeck_port_{side}_{i}", side, z, 0.43, materials, size=0.178)
         for i, z in enumerate(upper_ports):
-            add_side_gunport(f"upper_gundeck_port_{side}_{i}", side, z, 0.66, materials, size=0.168, offset=0.058)
-            x, y, _ = side_point(z, side, 0.72, 0.020)
-            add_cylinder_between(f"upper_deck_cannon_{side}_{i}", (x - side * 0.045, y, z), (x + side * 0.075, y - 0.006, z), 0.021, black, 12)
+            add_side_gunport(f"upper_gundeck_port_{side}_{i}", side, z, 0.66, materials, size=0.168)
+            origin, e_x, _, _ = hull_surface_frame(z, side, 0.66)
+            add_cylinder_between(f"upper_deck_cannon_{side}_{i}", tuple(origin - e_x * 0.06), tuple(origin + e_x * 0.10), 0.021, black, 12)
 
     # Stern windows and structural columns: tall rectangles so they do not read as gunports.
     for col, x in enumerate([-0.22, 0.0, 0.22]):
@@ -747,15 +831,15 @@ def decorate_hull(materials):
         (2.18, [-0.22, -0.07, 0.07, 0.22], 0.20),
     ]):
         for col, x in enumerate(xs):
-            add_rect_stern_window(f"stern_rect_window_{row}_{col}", (x, y, 2.50), (0.080, height), materials)
-    add_stern_door("stern_middle_gallery_door", (0.0, 1.62, 2.505), (0.13, 0.30), materials)
-    add_stern_door("stern_upper_gallery_door", (0.0, 2.00, 2.505), (0.12, 0.28), materials)
+            add_rect_stern_window(f"stern_rect_window_{row}_{col}", (x, y, 2.64), (0.080, height), materials)
+    add_stern_door("stern_middle_gallery_door", (0.0, 1.62, 2.645), (0.13, 0.30), materials)
+    add_stern_door("stern_upper_gallery_door", (0.0, 2.00, 2.645), (0.12, 0.28), materials)
     for x in [-0.48, -0.30, -0.10, 0.10, 0.30, 0.48]:
-        add_cylinder_between(f"stern_heavy_dark_gallery_column_{x}", (x, 1.12, 2.47), (x * 0.72, 2.42, 2.52), 0.020, dark, 12)
-        add_cylinder_between(f"stern_thin_gold_column_face_{x}", (x, 1.13, 2.51), (x * 0.72, 2.42, 2.56), 0.006, gold, 8)
-    for y, width in [(1.18, 1.14), (1.56, 1.10), (2.02, 0.90), (2.42, 0.72)]:
-        add_cube(f"stern_horizontal_dark_gallery_beam_{y}", (0, y, 2.52), (width, 0.030, 0.050), dark, 0.007)
-        add_cube(f"stern_horizontal_gold_gallery_face_{y}", (0, y + 0.020, 2.56), (width * 0.94, 0.010, 0.022), gold, 0.003)
+        add_cylinder_between(f"stern_heavy_dark_gallery_column_{x}", (x, 1.12, 2.61), (x * 0.72, 2.42, 2.66), 0.020, dark, 12)
+        add_cylinder_between(f"stern_thin_gold_column_face_{x}", (x, 1.13, 2.65), (x * 0.72, 2.42, 2.70), 0.006, gold, 8)
+    for y, width in [(1.18, 1.10), (1.56, 1.08), (2.02, 0.90), (2.42, 0.72)]:
+        add_cube(f"stern_horizontal_dark_gallery_beam_{y}", (0, y, 2.66), (width, 0.030, 0.050), dark, 0.007)
+        add_cube(f"stern_horizontal_gold_gallery_face_{y}", (0, y + 0.020, 2.70), (width * 0.94, 0.010, 0.022), gold, 0.003)
 
     # Rail posts, lantern hints, and three mast stumps for presentation.
     for side in (-1, 1):
@@ -767,28 +851,15 @@ def decorate_hull(materials):
         rail_pts = [side_point(z, side, 1.0, 0.04) for z in rail_z]
         rail_pts = [(x, y + 0.27, z) for x, y, z in rail_pts]
         add_polyline(f"top_rail_{side}", rail_pts, 0.034, dark)
-        mid_rail = [(x, y + 0.13, z) for x, y, z in rail_pts]
+        mid_rail = [(x, y - 0.14, z) for x, y, z in rail_pts]
         add_polyline(f"mid_rail_{side}", mid_rail, 0.018, dark)
+        # The bulwark rail ends below the balcony's aft corner; a tall corner
+        # stanchion carries the fall barrier up into the balcony rail instead
+        # of the old returns that dove inboard toward the castle wall.
         add_cylinder_between(
-            f"sterncastle_main_deck_top_rail_return_{side}",
-            rail_pts[0],
-            (side * 0.49, 1.47, 2.08),
-            0.030,
-            dark,
-            10,
-        )
-        add_cylinder_between(
-            f"sterncastle_main_deck_mid_rail_return_{side}",
-            mid_rail[0],
-            (side * 0.49, 1.34, 2.08),
-            0.018,
-            dark,
-            10,
-        )
-        add_cylinder_between(
-            f"sterncastle_rail_terminal_post_{side}",
-            (side * 0.49, 1.18, 2.08),
-            (side * 0.49, 1.50, 2.08),
+            f"sterncastle_rail_corner_stanchion_{side}",
+            (rail_pts[0][0], rail_pts[0][1] - 0.20, rail_pts[0][2]),
+            (side * 0.70, 1.955, 2.13),
             0.026,
             dark,
             10,
@@ -1083,6 +1154,36 @@ curved bow, gun ports, and a strong side silhouette.
   into curled corner spikes, most visible on the starboard sterncastle corners
 - moderated gallery tier bevel widths (0.070/0.060 -> 0.035/0.030) so tier
   rims read as crisp cornice lines instead of rolled lips
+
+2026-08-15 hull integration pass:
+
+- buried the sterncastle base into the deck and moved the shared transom line
+  aft of the hull's stern tip, with a new red counter fairing and shadow tuck,
+  so the castle sides meet the hull instead of floating beside/over it
+- shifted transom windows, doors, columns, beams, and the top tier stack aft
+  to follow the new stern line
+- connected the stair handrails: balusters planted in every tread, a bottom
+  newel with gold cap, the outer rail runs on into the landing rail, and the
+  inner rail terminates on a post at the landing
+- footed the second-level rail posts on the landing and lower gallery roof
+  with a shared level rail height
+- rebuilt gunports as surface-oriented recessed assemblies that hug the local
+  hull skin (shadow cut ring, thin architrave, sunken reveal/port faces), and
+  aligned the upper-deck cannon barrels to fire through their port centers
+  along the hull normal
+
+2026-08-15 balcony and gunport consistency pass:
+
+- gunport frames now sample the exact hull mesh skin (station vertex math with
+  per-station sheer softener, lerped like the mesh faces) so every port sits
+  at the same shallow recess depth instead of some floating and some burying
+- replaced the stair landing and inward-curving second-level rail with a
+  distinct railed balcony: overhanging plank deck on knee brackets, perimeter
+  posts and rails, front rail guarding the drop, and side openings where the
+  stair handrails arrive
+- the bulwark rail now hands off to the balcony rail through a tall corner
+  stanchion, keeping the fall barrier continuous deck-to-stair-to-balcony
+- fixed the main deck mid rail floating above the top rail
 """
     (OUT_DIR / "reference_notes.md").write_text(text, encoding="utf-8")
 

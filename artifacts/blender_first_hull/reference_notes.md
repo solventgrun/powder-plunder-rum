@@ -149,3 +149,33 @@ curved bow, gun ports, and a strong side silhouette.
   into curled corner spikes, most visible on the starboard sterncastle corners
 - moderated gallery tier bevel widths (0.070/0.060 -> 0.035/0.030) so tier
   rims read as crisp cornice lines instead of rolled lips
+
+2026-08-15 hull integration pass:
+
+- buried the sterncastle base into the deck and moved the shared transom line
+  aft of the hull's stern tip, with a new red counter fairing and shadow tuck,
+  so the castle sides meet the hull instead of floating beside/over it
+- shifted transom windows, doors, columns, beams, and the top tier stack aft
+  to follow the new stern line
+- connected the stair handrails: balusters planted in every tread, a bottom
+  newel with gold cap, the outer rail runs on into the landing rail, and the
+  inner rail terminates on a post at the landing
+- footed the second-level rail posts on the landing and lower gallery roof
+  with a shared level rail height
+- rebuilt gunports as surface-oriented recessed assemblies that hug the local
+  hull skin (shadow cut ring, thin architrave, sunken reveal/port faces), and
+  aligned the upper-deck cannon barrels to fire through their port centers
+  along the hull normal
+
+2026-08-15 balcony and gunport consistency pass:
+
+- gunport frames now sample the exact hull mesh skin (station vertex math with
+  per-station sheer softener, lerped like the mesh faces) so every port sits
+  at the same shallow recess depth instead of some floating and some burying
+- replaced the stair landing and inward-curving second-level rail with a
+  distinct railed balcony: overhanging plank deck on knee brackets, perimeter
+  posts and rails, front rail guarding the drop, and side openings where the
+  stair handrails arrive
+- the bulwark rail now hands off to the balcony rail through a tall corner
+  stanchion, keeping the fall barrier continuous deck-to-stair-to-balcony
+- fixed the main deck mid rail floating above the top rail
