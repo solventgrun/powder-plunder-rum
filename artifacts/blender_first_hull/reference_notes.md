@@ -179,3 +179,16 @@ curved bow, gun ports, and a strong side silhouette.
 - the bulwark rail now hands off to the balcony rail through a tall corner
   stanchion, keeping the fall barrier continuous deck-to-stair-to-balcony
 - fixed the main deck mid rail floating above the top rail
+
+2026-08-15 broadside and bow-face detail pass:
+
+- moved the gold strake, rivet rows, and panel dividers so nothing bisects a
+  gunport (strake 0.63 -> 0.55, rivet rows 0.34/0.60 -> 0.30/0.55, dividers
+  re-seated at the midpoints between upper ports), and re-laid planking,
+  strakes, rivets, and dividers on the exact hull skin so they no longer
+  float off the wavy surface
+- added lower gun deck cannon muzzles through the lower port centers
+- rebuilt the sterncastle's bow-facing openings with dedicated forward-proud
+  ornate assemblies: a paneled double balcony door with gold architrave,
+  entablature, and handles, flanked windows with mullions, deep glass, and
+  pediment crowns, plus a matching cabin door and windows at deck level

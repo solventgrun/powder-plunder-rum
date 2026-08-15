@@ -536,6 +536,50 @@ def add_stern_door(name, center, size, materials):
     add_cube(f"{name}_gold_right_jamb", (x + width * 0.55, y, z + 0.050), (0.020, height * 1.08, 0.052), gold, 0.004)
 
 
+def add_bow_face_window(name, center, size, materials):
+    # Ornate window for bow-facing sterncastle walls: pieces extend FORWARD
+    # (-z) off the wall plane, so frames sit proud and the glass reads deep.
+    x, y, wall_z = center
+    width, height = size
+    gold = materials["gold"]
+    dark = materials["dark_wood"]
+    black = materials["black"]
+    red = materials["red_paint"]
+    add_cube(f"{name}_red_surround", (x, y, wall_z - 0.000), (width * 1.52, height * 1.34, 0.036), red, 0.005)
+    add_cube(f"{name}_dark_reveal", (x, y, wall_z - 0.004), (width * 1.18, height * 1.14, 0.036), dark, 0.004)
+    add_cube(f"{name}_glass", (x, y, wall_z - 0.003), (width * 0.84, height * 0.84, 0.030), black, 0.003)
+    add_cube(f"{name}_gold_mullion_v", (x, y, wall_z - 0.014), (0.011, height * 0.84, 0.016), gold, 0.002)
+    add_cube(f"{name}_gold_mullion_h", (x, y + height * 0.10, wall_z - 0.014), (width * 0.84, 0.011, 0.016), gold, 0.002)
+    add_cube(f"{name}_gold_lintel", (x, y + height * 0.62, wall_z - 0.008), (width * 1.60, 0.026, 0.044), gold, 0.004)
+    add_cube(f"{name}_gold_sill", (x, y - height * 0.60, wall_z - 0.008), (width * 1.50, 0.022, 0.044), gold, 0.004)
+    add_cube(f"{name}_gold_left_jamb", (x - width * 0.62, y, wall_z - 0.008), (0.020, height * 1.18, 0.040), gold, 0.003)
+    add_cube(f"{name}_gold_right_jamb", (x + width * 0.62, y, wall_z - 0.008), (0.020, height * 1.18, 0.040), gold, 0.003)
+    add_ellipsoid(f"{name}_gold_pediment_crown", (x, y + height * 0.72, wall_z - 0.024), (width * 0.66, 0.024, 0.020), gold, 12, 6)
+
+
+def add_bow_face_door(name, center, size, materials):
+    # Ornate double door for bow-facing sterncastle walls: paneled dark
+    # leaves in a gold architrave under a small entablature and cornice.
+    x, y, wall_z = center
+    width, height = size
+    gold = materials["gold"]
+    dark = materials["dark_wood"]
+    black = materials["black"]
+    red = materials["red_paint"]
+    add_cube(f"{name}_red_surround", (x, y, wall_z - 0.000), (width * 1.62, height * 1.24, 0.036), red, 0.005)
+    add_cube(f"{name}_dark_double_leaf", (x, y, wall_z - 0.010), (width, height, 0.040), dark, 0.005)
+    add_cube(f"{name}_leaf_split_shadow", (x, y, wall_z - 0.031), (0.009, height * 0.92, 0.010), black, 0.002)
+    for lx in (-1, 1):
+        add_cube(f"{name}_leaf_panel_upper_{lx}", (x + lx * width * 0.24, y + height * 0.22, wall_z - 0.030), (width * 0.30, height * 0.30, 0.012), black, 0.002)
+        add_cube(f"{name}_leaf_panel_lower_{lx}", (x + lx * width * 0.24, y - height * 0.22, wall_z - 0.030), (width * 0.30, height * 0.30, 0.012), black, 0.002)
+        add_ellipsoid(f"{name}_gold_handle_{lx}", (x + lx * width * 0.11, y - height * 0.03, wall_z - 0.034), (0.010, 0.010, 0.008), gold, 8, 4)
+    add_cube(f"{name}_gold_left_jamb", (x - width * 0.60, y, wall_z - 0.008), (0.022, height * 1.10, 0.044), gold, 0.003)
+    add_cube(f"{name}_gold_right_jamb", (x + width * 0.60, y, wall_z - 0.008), (0.022, height * 1.10, 0.044), gold, 0.003)
+    add_cube(f"{name}_gold_entablature", (x, y + height * 0.60, wall_z - 0.008), (width * 1.55, 0.030, 0.048), gold, 0.004)
+    add_cube(f"{name}_dark_cornice", (x, y + height * 0.69, wall_z - 0.004), (width * 1.40, 0.026, 0.056), dark, 0.004)
+    add_cube(f"{name}_gold_threshold", (x, y - height * 0.56, wall_z - 0.006), (width * 1.30, 0.020, 0.048), gold, 0.003)
+
+
 def add_sterncastle_anchor(materials):
     dark = materials["dark_wood"]
     red = materials["red_paint"]
@@ -730,13 +774,21 @@ def decorate_hull(materials):
     gold = materials["gold"]
     black = materials["black"]
 
-    # Horizontal planking and ornate gold strakes.
+    # Horizontal planking and ornate gold strakes. Lines ride the exact hull
+    # skin, and their heights are chosen to run BETWEEN the gunport rows
+    # (lower ports span roughly t 0.35-0.52, upper ports t 0.58-0.75).
     for side in (-1, 1):
         for t in (0.16, 0.27, 0.38, 0.49, 0.60):
-            pts = [side_point(z, side, t, 0.015) for z, *_ in station_profile()[1:-1]]
-            add_polyline(f"wood_plank_line_{side}_{t:.2f}", pts, 0.009, dark)
-        for t, radius in ((0.63, 0.012), (0.78, 0.010), (0.88, 0.015), (0.98, 0.012)):
-            pts = [side_point(z, side, t, 0.025) for z, *_ in station_profile()[1:-1]]
+            pts = []
+            for z, *_ in station_profile()[1:-1]:
+                origin, e_x, _, _ = hull_surface_frame(z, side, t)
+                pts.append(tuple(origin + e_x * 0.004))
+            add_polyline(f"wood_plank_line_{side}_{t:.2f}", pts, 0.008, dark)
+        for t, radius in ((0.55, 0.012), (0.78, 0.010), (0.88, 0.015), (0.98, 0.012)):
+            pts = []
+            for z, *_ in station_profile()[1:-1]:
+                origin, e_x, _, _ = hull_surface_frame(z, side, t)
+                pts.append(tuple(origin + e_x * 0.006))
             add_polyline(f"gold_hull_sheer_{side}_{t:.2f}", pts, radius, gold)
 
     # Deck insert, red gun band, and raised castles.
@@ -815,16 +867,24 @@ def decorate_hull(materials):
     for side in (-1, 1):
         for i, z in enumerate(lower_ports):
             add_side_gunport(f"lower_gundeck_port_{side}_{i}", side, z, 0.43, materials, size=0.178)
+            origin, e_x, _, _ = hull_surface_frame(z, side, 0.43)
+            add_cylinder_between(f"lower_deck_cannon_{side}_{i}", tuple(origin - e_x * 0.06), tuple(origin + e_x * 0.11), 0.024, black, 12)
         for i, z in enumerate(upper_ports):
             add_side_gunport(f"upper_gundeck_port_{side}_{i}", side, z, 0.66, materials, size=0.168)
             origin, e_x, _, _ = hull_surface_frame(z, side, 0.66)
             add_cylinder_between(f"upper_deck_cannon_{side}_{i}", tuple(origin - e_x * 0.06), tuple(origin + e_x * 0.10), 0.021, black, 12)
 
     # Stern windows and structural columns: tall rectangles so they do not read as gunports.
-    for col, x in enumerate([-0.22, 0.0, 0.22]):
-        add_rect_stern_window(f"stern_bow_face_second_level_window_{col}", (x, 1.96, 2.105), (0.075, 0.18), materials)
-    add_cube("stern_bow_face_second_level_dark_lintel", (0, 2.11, 2.105), (0.62, 0.030, 0.050), dark, 0.006)
-    add_cube("stern_bow_face_second_level_gold_sill", (0, 1.77, 2.105), (0.54, 0.020, 0.052), gold, 0.004)
+    # Bow face of the sterncastle: an ornate balcony door flanked by framed
+    # windows on the second level, and a cabin door with windows at deck
+    # level, all built proud toward the bow off their wall planes.
+    add_bow_face_door("stern_bow_face_balcony_door", (0.0, 1.90, 2.16), (0.17, 0.34), materials)
+    for col, x in enumerate([-0.245, 0.245]):
+        add_bow_face_window(f"stern_bow_face_second_level_window_{col}", (x, 1.97, 2.16), (0.085, 0.19), materials)
+    add_cube("stern_bow_face_second_level_dark_lintel", (0, 2.155, 2.145), (0.62, 0.028, 0.040), dark, 0.006)
+    add_bow_face_door("stern_deck_level_cabin_door", (0.0, 1.19, 1.61), (0.20, 0.32), materials)
+    for col, x in enumerate([-0.30, 0.30]):
+        add_bow_face_window(f"stern_deck_level_cabin_window_{col}", (x, 1.22, 1.61), (0.080, 0.15), materials)
     for row, (y, xs, height) in enumerate([
         (1.34, [-0.32, -0.16, 0.0, 0.16, 0.32], 0.18),
         (1.86, [-0.24, -0.08, 0.08, 0.24], 0.20),
@@ -917,19 +977,22 @@ def decorate_hull(materials):
         add_cylinder_between(f"Figurehead_gold_mane_sweep_{side}", (side * 0.045, 1.10, -3.00), (side * 0.085, 0.98, -2.88), 0.010, gold, 8)
     add_cube("Figurehead_dark_mounting_bracket", (0, 0.72, -2.70), (0.12, 0.060, 0.14), dark, 0.012)
 
-    # Gold rivets and rosettes: small enough to be charming, big enough to read.
+    # Gold rivets and rosettes: small enough to be charming, big enough to
+    # read. Heights avoid the port rows and dividers sit at the midpoints
+    # between upper ports so nothing bisects a gunport.
     for side in (-1, 1):
         for z in [1.5, 1.0, 0.5, 0.0, -0.5, -1.0, -1.5]:
-            for t in [0.34, 0.60, 0.86]:
-                x, y, _ = side_point(z, side, t, 0.055)
-                bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=4, radius=0.028, location=(x, y, z))
+            for t in [0.30, 0.55, 0.86]:
+                origin, e_x, _, _ = hull_surface_frame(z, side, t)
+                loc = origin + e_x * 0.010
+                bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=4, radius=0.028, location=tuple(loc))
                 rivet = bpy.context.object
                 rivet.name = f"gold_rivet_{side}_{z}_{t}"
                 rivet.scale.x = 0.55
                 rivet.data.materials.append(gold)
-        for z in [1.72, 1.18, 0.64, 0.10, -0.44, -0.98, -1.48]:
-            x, y, _ = side_point(z, side, 0.66, 0.058)
-            add_cube(f"painted_hull_panel_divider_{side}_{z}", (x, y, z), (0.034, 0.30, 0.028), gold, 0.006)
+        for z in [1.53, 1.07, 0.61, 0.15, -0.31, -0.77, -1.23]:
+            frame = hull_surface_frame(z, side, 0.66)
+            add_surface_cube(f"painted_hull_panel_divider_{side}_{z}", frame, (0.012, 0.0, 0.0), (0.030, 0.30, 0.028), gold, 0.006)
 
 
 def add_lighting_and_camera():
@@ -1184,6 +1247,19 @@ curved bow, gun ports, and a strong side silhouette.
 - the bulwark rail now hands off to the balcony rail through a tall corner
   stanchion, keeping the fall barrier continuous deck-to-stair-to-balcony
 - fixed the main deck mid rail floating above the top rail
+
+2026-08-15 broadside and bow-face detail pass:
+
+- moved the gold strake, rivet rows, and panel dividers so nothing bisects a
+  gunport (strake 0.63 -> 0.55, rivet rows 0.34/0.60 -> 0.30/0.55, dividers
+  re-seated at the midpoints between upper ports), and re-laid planking,
+  strakes, rivets, and dividers on the exact hull skin so they no longer
+  float off the wavy surface
+- added lower gun deck cannon muzzles through the lower port centers
+- rebuilt the sterncastle's bow-facing openings with dedicated forward-proud
+  ornate assemblies: a paneled double balcony door with gold architrave,
+  entablature, and handles, flanked windows with mullions, deep glass, and
+  pediment crowns, plus a matching cabin door and windows at deck level
 """
     (OUT_DIR / "reference_notes.md").write_text(text, encoding="utf-8")
 
