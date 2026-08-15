@@ -10,7 +10,7 @@ const MuzzleFlashScene := preload("res://game/scenes/MuzzleFlash.tscn")
 @export var process_player_input: bool = true
 @export_range(0.1, 3.0, 0.05) var muzzle_spacing: float = 0.75
 @export_range(0.0, 15.0, 0.5, "degrees") var spread_degrees: float = 2.0
-@export_range(10.0, 120.0, 1.0) var convergence_distance: float = 55.0
+@export_range(10.0, 120.0, 1.0) var convergence_distance: float = 41.0
 @export_range(0.0, 1.0, 0.05) var convergence_strength: float = 0.75
 
 var cannon_types: Dictionary = {}
@@ -142,9 +142,10 @@ func _fire_side(side: int) -> bool:
 		var yaw := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
 		direction = direction.rotated(Vector3.UP, yaw).normalized()
 
-		var spawn_parent := get_tree().current_scene
-		if spawn_parent == null:
-			spawn_parent = parent_3d.get_parent()
+		# Spawn as a sibling of the ship, not under get_tree().current_scene:
+		# current_scene can point at a different scene than the ship's (test
+		# harness scenes, the battle-end scene-change window).
+		var spawn_parent := parent_3d.get_parent()
 		spawn_parent.add_child(projectile_3d)
 		projectile_3d.global_position = muzzle_position
 		projectile_3d.call("configure", direction, cannon, ammo, parent_3d)
@@ -155,6 +156,10 @@ func _fire_side(side: int) -> bool:
 		self_status_effects = _roll_self_status_effects(ammo.get("status_effects"))
 		if not self_status_effects.is_empty() and parent_3d.has_method("apply_status_effects"):
 			parent_3d.call("apply_status_effects", self_status_effects)
+
+		var visual_root := parent_3d.get_node_or_null("VisualRoot")
+		if visual_root and visual_root.has_method("add_recoil_roll"):
+			visual_root.call("add_recoil_roll", side)
 
 		var boom_player := get_node_or_null("CannonBoomPlayer")
 		if boom_player and boom_player.has_method("play_boom"):

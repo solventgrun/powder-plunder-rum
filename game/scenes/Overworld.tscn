@@ -1,0 +1,141 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/overworld/Overworld.gd" id="1_overworld"]
+[ext_resource type="Script" path="res://game/scripts/WindSystem.gd" id="2_wind"]
+[ext_resource type="Script" path="res://game/scripts/overworld/JamaicaIsland.gd" id="3_jamaica"]
+[ext_resource type="PackedScene" path="res://game/scenes/OverworldPlayerShip.tscn" id="4_player"]
+[ext_resource type="Script" path="res://game/scripts/FollowCamera.gd" id="5_camera"]
+[ext_resource type="Script" path="res://game/scripts/overworld/OverworldDebugPanel.gd" id="6_debug"]
+[ext_resource type="Script" path="res://game/scripts/overworld/OverworldCompass.gd" id="7_compass"]
+[ext_resource type="Environment" path="res://game/environment/CaribbeanEnvironment.tres" id="8_environment"]
+[ext_resource type="Material" path="res://game/materials/StylizedOceanMaterial.tres" id="9_ocean_material"]
+[ext_resource type="Theme" path="res://game/ui/HudTheme.tres" id="10_theme"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
+size = Vector2(240, 180)
+subdivide_width = 96
+subdivide_depth = 72
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_town"]
+top_radius = 1.8
+bottom_radius = 2.2
+height = 0.55
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_town"]
+albedo_color = Color(0.82, 0.68, 0.36, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_town_flag"]
+size = Vector3(0.2, 2.2, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_town_flag"]
+albedo_color = Color(0.85, 0.16, 0.12, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_debug"]
+font_size = 16
+font_color = Color(0.92, 0.98, 1, 1)
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.78)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_world_bound"]
+size = Vector3(250, 2, 2)
+
+[node name="Overworld" type="Node3D"]
+script = ExtResource("1_overworld")
+player_path = NodePath("PlayerShip")
+
+[node name="Ocean" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_ocean")
+surface_material_override/0 = ExtResource("9_ocean_material")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 18, 0)
+light_energy = 1.8
+shadow_enabled = true
+directional_shadow_max_distance = 220.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("8_environment")
+
+[node name="WindSystem" type="Node" parent="."]
+script = ExtResource("2_wind")
+allow_debug_wind_controls = false
+
+[node name="JamaicaIsland" type="StaticBody3D" parent="."]
+script = ExtResource("3_jamaica")
+
+[node name="PortRoyal" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0.95, 26)
+
+[node name="TownMarker" type="MeshInstance3D" parent="PortRoyal"]
+mesh = SubResource("CylinderMesh_town")
+surface_material_override/0 = SubResource("StandardMaterial3D_town")
+
+[node name="FlagPole" type="MeshInstance3D" parent="PortRoyal"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 0)
+mesh = SubResource("BoxMesh_town_flag")
+surface_material_override/0 = SubResource("StandardMaterial3D_town_flag")
+
+[node name="TownLabel" type="Label3D" parent="PortRoyal"]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 3.2, 1.2)
+text = "Port Royal"
+font_size = 48
+pixel_size = 0.035
+outline_size = 10
+
+[node name="PlayerShip" parent="." instance=ExtResource("4_player")]
+transform = Transform3D(0.866025, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866025, -18, 0, 44)
+wind_system_path = NodePath("../WindSystem")
+
+[node name="WorldBounds" type="StaticBody3D" parent="."]
+
+[node name="North" type="CollisionShape3D" parent="WorldBounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -91)
+shape = SubResource("BoxShape3D_world_bound")
+
+[node name="South" type="CollisionShape3D" parent="WorldBounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 91)
+shape = SubResource("BoxShape3D_world_bound")
+
+[node name="West" type="CollisionShape3D" parent="WorldBounds"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -121, 0, 0)
+shape = SubResource("BoxShape3D_world_bound")
+
+[node name="East" type="CollisionShape3D" parent="WorldBounds"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 121, 0, 0)
+shape = SubResource("BoxShape3D_world_bound")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 48, 42)
+current = true
+script = ExtResource("5_camera")
+target_path = NodePath("../PlayerShip")
+follow_offset = Vector3(0, 52, 46)
+follow_smoothing = 5.0
+
+[node name="Debug" type="CanvasLayer" parent="."]
+script = ExtResource("6_debug")
+player_path = NodePath("../PlayerShip")
+wind_system_path = NodePath("../WindSystem")
+overworld_path = NodePath("..")
+
+[node name="DebugLabel" type="Label" parent="Debug"]
+offset_left = 18.0
+offset_top = 16.0
+offset_right = 330.0
+offset_bottom = 170.0
+label_settings = SubResource("LabelSettings_debug")
+
+[node name="Compass" type="Control" parent="Debug"]
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -180.0
+offset_top = 18.0
+offset_right = -22.0
+offset_bottom = 176.0
+grow_horizontal = 0
+theme = ExtResource("10_theme")
+script = ExtResource("7_compass")
+player_path = NodePath("../../PlayerShip")
+wind_system_path = NodePath("../../WindSystem")

@@ -1,0 +1,77 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/overworld/OverworldNpcShip.gd" id="1_npc"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="2_visual"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWaveMotion.gd" id="3_wave"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_hull"]
+size = Vector3(1.2, 0.38, 2.4)
+
+[sub_resource type="PrismMesh" id="PrismMesh_bow"]
+left_to_right = 1.2
+size = Vector3(1.2, 0.38, 0.75)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ship"]
+size = Vector3(2.8, 0.65, 5.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_npc"]
+albedo_color = Color(0.2, 0.18, 0.12, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sail"]
+albedo_color = Color(0.85, 0.78, 0.58, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_marker"]
+top_radius = 2.8
+bottom_radius = 2.8
+height = 0.04
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_marker"]
+albedo_color = Color(0.95, 0.82, 0.26, 0.86)
+
+[sub_resource type="BoxMesh" id="BoxMesh_flag"]
+size = Vector3(0.12, 1.0, 1.4)
+
+[node name="OverworldNpcShip" type="CharacterBody3D"]
+script = ExtResource("1_npc")
+
+[node name="WaterMarker" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.02, 0, 0, 0, 1, 0, 0.3, 0)
+mesh = SubResource("CylinderMesh_marker")
+surface_material_override/0 = SubResource("StandardMaterial3D_marker")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+script = ExtResource("3_wave")
+
+[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("BoxMesh_hull")
+surface_material_override/0 = SubResource("StandardMaterial3D_npc")
+
+[node name="Bow" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.35, -1.45)
+mesh = SubResource("PrismMesh_bow")
+surface_material_override/0 = SubResource("StandardMaterial3D_npc")
+
+[node name="Mast" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(0.12, 0, 0, 0, 1.6, 0, 0, 0, 0.12, 0, 1.05, -0.08)
+mesh = SubResource("BoxMesh_hull")
+surface_material_override/0 = SubResource("StandardMaterial3D_sail")
+
+[node name="ShipVisualBuilder" type="Node3D" parent="VisualRoot"]
+script = ExtResource("2_visual")
+
+[node name="FactionFlag" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 2.8, -0.2)
+mesh = SubResource("BoxMesh_flag")
+surface_material_override/0 = SubResource("StandardMaterial3D_marker")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.24, -0.1)
+shape = SubResource("BoxShape3D_ship")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 4.2, 1.2)
+text = "NPC Ship"
+font_size = 40
+pixel_size = 0.035
+outline_size = 10

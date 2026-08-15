@@ -11,6 +11,7 @@ const TARGET_SHIP_PATH := "res://data/ships/target_ship.yaml"
 const FACTIONS_PATH := "res://data/factions/factions.yaml"
 const FLAGS_PATH := "res://data/visuals/flags.yaml"
 const ENVIRONMENT_CONDITIONS_PATH := "res://data/environment/environment_conditions.yaml"
+const OVERWORLD_SHIPS_PATH := "res://data/encounters/overworld_ships.yaml"
 const CANNON_TYPE_SCRIPT := preload("res://game/scripts/content/CannonType.gd")
 const AMMO_TYPE_SCRIPT := preload("res://game/scripts/content/AmmoType.gd")
 const SHIP_STATS_SCRIPT := preload("res://game/scripts/content/ShipStats.gd")
@@ -139,6 +140,10 @@ static func load_environment_conditions() -> Dictionary:
 static func load_environment_condition(condition_id: String = "default_battle") -> Dictionary:
 	var conditions := load_environment_conditions()
 	return conditions.get(condition_id, conditions.get("default_battle", {}))
+
+
+static func load_overworld_ship_records() -> Array[Dictionary]:
+	return _load_overworld_ship_records(OVERWORLD_SHIPS_PATH)
 	
 
 static func load_fire_levels() -> Dictionary:
@@ -511,6 +516,111 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 			root.broadsides[current_side].cannons.append(_parse_scalar(line.substr(2).strip_edges()))
 
 	return root
+
+
+static func _load_overworld_ship_records(path: String) -> Array[Dictionary]:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Could not open content file: %s" % path)
+		return []
+
+	var records: Array[Dictionary] = []
+	var current: Dictionary = {}
+	var in_root := false
+	var in_route := false
+	var current_route_point: Dictionary = {}
+	var current_side := ""
+	var in_cannons := false
+
+	while not file.eof_reached():
+		var raw_line := file.get_line()
+		var line := raw_line.strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+
+		if not raw_line.begins_with(" "):
+			in_root = line == "overworld_ships:"
+			continue
+
+		if not in_root:
+			continue
+
+		var indent := _count_leading_spaces(raw_line)
+		if line.begins_with("- id:"):
+			if not current_route_point.is_empty():
+				current.route.append(current_route_point)
+				current_route_point = {}
+			if not current.is_empty():
+				records.append(current)
+			current = _default_overworld_ship_record()
+			current["id"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+			in_route = false
+			in_cannons = false
+			current_side = ""
+		elif current.is_empty():
+			continue
+		elif indent == 4 and line.begins_with("route:"):
+			in_route = true
+			in_cannons = false
+			current_side = ""
+		elif indent == 6 and in_route and line.begins_with("- x:"):
+			if not current_route_point.is_empty():
+				current.route.append(current_route_point)
+			current_route_point = {"x": _parse_scalar(line.substr(line.find(":") + 1).strip_edges())}
+		elif indent == 8 and in_route and line.begins_with("z:"):
+			current_route_point["z"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
+		elif indent == 6 and (line == "port:" or line == "starboard:"):
+			if not current_route_point.is_empty():
+				current.route.append(current_route_point)
+				current_route_point = {}
+			in_route = false
+			current_side = line.trim_suffix(":")
+			in_cannons = false
+		elif indent == 8 and line == "cannons:" and not current_side.is_empty():
+			in_cannons = true
+		elif indent == 10 and line.begins_with("- ") and in_cannons and not current_side.is_empty():
+			current.broadsides[current_side].cannons.append(_parse_scalar(line.substr(2).strip_edges()))
+		elif indent == 4:
+			if not current_route_point.is_empty():
+				current.route.append(current_route_point)
+				current_route_point = {}
+			in_route = false
+			in_cannons = false
+			current_side = ""
+			if line == "broadsides:":
+				continue
+			var separator := line.find(":")
+			if separator > 0:
+				var key := line.substr(0, separator).strip_edges()
+				current[key] = _parse_scalar(line.substr(separator + 1).strip_edges())
+
+	if not current_route_point.is_empty() and not current.is_empty():
+		current.route.append(current_route_point)
+	if not current.is_empty():
+		records.append(current)
+
+	return records
+
+
+static func _default_overworld_ship_record() -> Dictionary:
+	return {
+		"id": "",
+		"name": "",
+		"faction": "spain",
+		"ship_type": "brig",
+		"visual_variant": "",
+		"sail_set": "full",
+		"crew": 0,
+		"cargo_weight": 0.0,
+		"start_x": 0.0,
+		"start_z": 0.0,
+		"route": [],
+		"modifications": [],
+		"broadsides": {
+			"port": {"cannons": []},
+			"starboard": {"cannons": []}
+		}
+	}
 
 
 static func _set_record_value(record: Dictionary, line: String) -> String:

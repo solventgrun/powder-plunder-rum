@@ -10,8 +10,8 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 @export var firing_enabled: bool = true
 @export_range(0.15, 1.0, 0.01) var sail_trim: float = 0.85
 @export_range(0.0, 1.0, 0.01) var aim_tolerance: float = 0.55
-@export_range(8.0, 90.0, 1.0) var preferred_range: float = 54.0
-@export_range(2.0, 40.0, 1.0) var minimum_range: float = 18.0
+@export_range(8.0, 90.0, 1.0) var preferred_range: float = 40.0
+@export_range(2.0, 40.0, 1.0) var minimum_range: float = 14.0
 @export_range(0.0, 20.0, 0.5, "degrees") var steering_wobble_degrees: float = 5.0
 @export_range(0.0, 12.0, 0.25) var initial_firing_delay: float = 3.0
 @export_range(0.0, 4.0, 0.1) var aim_commit_time: float = 0.45
@@ -19,7 +19,7 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 @export var minimum_cannon_hit_scale: float = 1.12
 
 @onready var sailing_model: Node = $SailingModel
-@onready var ship_visuals: Node = $ShipVisualBuilder
+@onready var ship_visuals: Node = $VisualRoot/ShipVisualBuilder
 @onready var combat: Node = $ShipCombatComponent
 @onready var broadside_controller: Node = $BroadsideController
 
@@ -35,8 +35,8 @@ var aim_commit_timer: float = 0.0
 
 
 func _ready() -> void:
-	ship_loadout = ContentCatalog.load_target_ship_record()
-	_apply_ship_stats(ContentCatalog.load_target_ship_stats())
+	ship_loadout = _load_encounter_ship_record()
+	_apply_ship_stats(ContentCatalog.build_ship_stats(ship_loadout, ContentCatalog.load_ship_types(), ContentCatalog.load_ship_modifications()))
 	if ship_visuals:
 		ship_visuals.apply_visuals(ship_loadout, ship_stats)
 	if combat:
@@ -233,3 +233,12 @@ func _apply_cannon_hit_forgiveness(visual_scale: float) -> void:
 		return
 	var forgiveness_scale := (minimum_cannon_hit_scale + 0.03) / maxf(visual_scale, 0.01)
 	collision.scale = Vector3.ONE * forgiveness_scale
+
+
+func _load_encounter_ship_record() -> Dictionary:
+	var session := get_node_or_null("/root/GameSession")
+	if session and session.has_method("get_selected_encounter"):
+		var encounter: Dictionary = session.call("get_selected_encounter")
+		if not encounter.is_empty():
+			return encounter
+	return ContentCatalog.load_target_ship_record()

@@ -82,6 +82,7 @@ func update_sail_trim(trim: float) -> void:
 		var fullness := lerpf(0.55, 1.0, clampf(trim, 0.0, 1.0))
 		sail.scale.x = fullness
 		sail.rotation_degrees.y = lerpf(-7.0, 6.0, trim)
+		_apply_sail_billow(sail, trim)
 
 
 func set_damage_fraction(hull_fraction: float) -> void:
@@ -200,9 +201,12 @@ func _build_sails(sails: Dictionary, sail_color: Color) -> void:
 		var sail: Dictionary = sails[sail_id]
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.name = "Sail_%s" % sail_id
-		mesh_instance.mesh = _make_sail_mesh(str(sail.get("type", "square")), _parse_vec2(str(sail.get("size", "[1.0, 1.0]"))))
+		mesh_instance.set_meta("sail_geometry", _build_sail_geometry(str(sail.get("type", "square")), _parse_vec2(str(sail.get("size", "[1.0, 1.0]")))))
 		mesh_instance.position = _parse_vec3(str(sail.get("position", "[0.0, 1.2, 0.0]")))
 		mesh_instance.material_override = _standard_material(sail_color, 0.92, true)
+		# Default trim matches the controllers' default; ships that never call
+		# update_sail_trim (enemy battle ships) still read as filled.
+		_apply_sail_billow(mesh_instance, 0.85)
 		generated_root.add_child(mesh_instance)
 		sail_nodes.append(mesh_instance)
 
@@ -236,64 +240,171 @@ func _cache_visual_state_sockets(states: Dictionary) -> void:
 			fire_socket_positions[key] = _parse_vec3(str(states[key]))
 
 
-func _make_sail_mesh(sail_type: String, size: Vector2) -> ArrayMesh:
+# Subdivided sail geometry with per-vertex billow weights (0 at the fixed
+# edges, 1 mid-canvas) so _apply_sail_billow can puff the canvas bow-ward.
+func _build_sail_geometry(sail_type: String, size: Vector2) -> Dictionary:
 	var width := size.x
 	var height := size.y
-	var vertices: PackedVector3Array = []
-	var uvs: PackedVector2Array = []
-	var indices: PackedInt32Array = []
 	if sail_type == "triangular":
-		vertices = PackedVector3Array([
+		return _build_triangle_sail([
 			Vector3(-width * 0.5, -height * 0.5, 0.0),
 			Vector3(width * 0.5, -height * 0.5, 0.0),
 			Vector3(width * 0.5, height * 0.5, 0.08)
-		])
-		uvs = PackedVector2Array([
-			Vector2(0.0, 1.0),
-			Vector2(1.0, 1.0),
-			Vector2(1.0, 0.0)
-		])
-		indices = PackedInt32Array([0, 1, 2])
-	elif sail_type == "lateen":
-		vertices = PackedVector3Array([
+		], [Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 0.0)], size)
+	if sail_type == "lateen":
+		return _build_triangle_sail([
 			Vector3(-width * 0.55, -height * 0.48, 0.0),
 			Vector3(width * 0.55, -height * 0.3, 0.0),
 			Vector3(width * 0.35, height * 0.5, 0.08)
-		])
-		uvs = PackedVector2Array([
-			Vector2(0.0, 1.0),
-			Vector2(1.0, 1.0),
-			Vector2(0.82, 0.0)
-		])
-		indices = PackedInt32Array([0, 1, 2])
-	elif sail_type == "fore_aft":
-		vertices = PackedVector3Array([
+		], [Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(0.82, 0.0)], size)
+	if sail_type == "fore_aft":
+		return _build_quad_sail([
 			Vector3(-width * 0.45, -height * 0.5, 0.0),
 			Vector3(width * 0.5, -height * 0.45, 0.0),
 			Vector3(width * 0.32, height * 0.5, 0.1),
 			Vector3(-width * 0.32, height * 0.42, 0.04)
-		])
-		uvs = PackedVector2Array([
-			Vector2(0.0, 1.0),
-			Vector2(1.0, 1.0),
-			Vector2(1.0, 0.0),
-			Vector2(0.0, 0.0)
-		])
-		indices = PackedInt32Array([0, 1, 2, 0, 2, 3])
-	else:
-		vertices = PackedVector3Array([
-			Vector3(-width * 0.5, -height * 0.5, 0.0),
-			Vector3(width * 0.5, -height * 0.5, 0.0),
-			Vector3(width * 0.48, height * 0.5, 0.08),
-			Vector3(-width * 0.48, height * 0.5, 0.08)
-		])
-		uvs = PackedVector2Array([
-			Vector2(0.0, 1.0),
-			Vector2(1.0, 1.0),
-			Vector2(1.0, 0.0),
-			Vector2(0.0, 0.0)
-		])
-		indices = PackedInt32Array([0, 1, 2, 0, 2, 3])
+		], size)
+	return _build_quad_sail([
+		Vector3(-width * 0.5, -height * 0.5, 0.0),
+		Vector3(width * 0.5, -height * 0.5, 0.0),
+		Vector3(width * 0.48, height * 0.5, 0.08),
+		Vector3(-width * 0.48, height * 0.5, 0.08)
+	], size)
+
+
+# Corners ordered bottom-left, bottom-right, top-right, top-left.
+func _build_quad_sail(corners: Array, size: Vector2) -> Dictionary:
+	const COLS := 7
+	const ROWS := 5
+	var vertices := PackedVector3Array()
+	var weights := PackedFloat32Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for row in range(ROWS + 1):
+		var v := float(row) / float(ROWS)
+		for col in range(COLS + 1):
+			var u := float(col) / float(COLS)
+			var bottom: Vector3 = corners[0].lerp(corners[1], u)
+			var top: Vector3 = corners[3].lerp(corners[2], u)
+			vertices.append(bottom.lerp(top, v))
+			weights.append(sin(PI * u) * sin(PI * v))
+			uvs.append(Vector2(u, 1.0 - v))
+	for row in range(ROWS):
+		for col in range(COLS):
+			var index := row * (COLS + 1) + col
+			indices.append_array(PackedInt32Array([
+				index, index + 1, index + COLS + 2,
+				index, index + COLS + 2, index + COLS + 1
+			]))
+	return {
+		"base_vertices": vertices,
+		"weights": weights,
+		"uvs": uvs,
+		"indices": indices,
+		"max_billow": minf(size.x, size.y) * 0.42
+	}
+
+
+# Corners ordered so index 2 is the apex; rows subdivide apex-to-foot.
+func _build_triangle_sail(corners: Array, corner_uvs: Array, size: Vector2) -> Dictionary:
+	const ROWS := 5
+	var apex: Vector3 = corners[2]
+	var apex_uv: Vector2 = corner_uvs[2]
+	var vertices := PackedVector3Array()
+	var weights := PackedFloat32Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var row_offsets: Array[int] = []
+	for row in range(ROWS + 1):
+		row_offsets.append(vertices.size())
+		for col in range(row + 1):
+			var lambda_apex := 1.0 - float(row) / float(ROWS)
+			var lambda_left := (float(row) - float(col)) / float(ROWS)
+			var lambda_right := float(col) / float(ROWS)
+			vertices.append(apex * lambda_apex + corners[0] * lambda_left + corners[1] * lambda_right)
+			weights.append(27.0 * lambda_apex * lambda_left * lambda_right)
+			uvs.append(apex_uv * lambda_apex + corner_uvs[0] * lambda_left + corner_uvs[1] * lambda_right)
+	for row in range(ROWS):
+		for col in range(row + 1):
+			indices.append_array(PackedInt32Array([
+				row_offsets[row] + col, row_offsets[row + 1] + col, row_offsets[row + 1] + col + 1
+			]))
+			if col < row:
+				indices.append_array(PackedInt32Array([
+					row_offsets[row] + col, row_offsets[row + 1] + col + 1, row_offsets[row] + col + 1
+				]))
+	return {
+		"base_vertices": vertices,
+		"weights": weights,
+		"uvs": uvs,
+		"indices": indices,
+		"max_billow": minf(size.x, size.y) * 0.34
+	}
+
+
+func _apply_sail_billow(mesh_instance: MeshInstance3D, trim: float) -> void:
+	var data: Dictionary = mesh_instance.get_meta("sail_geometry", {})
+	if data.is_empty():
+		return
+	var base: PackedVector3Array = data.base_vertices
+	var weights: PackedFloat32Array = data.weights
+	# Eased sails hang slack; trimmed-in sails fill. Billow is toward the bow
+	# (-Z), the direction the prevailing wind presses the canvas.
+	var depth: float = float(data.max_billow) * lerpf(0.3, 1.0, clampf(trim, 0.0, 1.0))
+	var vertices := PackedVector3Array()
+	vertices.resize(base.size())
+	for index in range(base.size()):
+		var vertex := base[index]
+		vertex.z -= weights[index] * depth
+		vertices[index] = vertex
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = _compute_smooth_normals(vertices, data.indices)
+	arrays[Mesh.ARRAY_TEX_UV] = data.uvs
+	arrays[Mesh.ARRAY_INDEX] = data.indices
+	var mesh := mesh_instance.mesh as ArrayMesh
+	if mesh == null:
+		mesh = ArrayMesh.new()
+		mesh_instance.mesh = mesh
+	mesh.clear_surfaces()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+
+# Area-weighted smooth normals; without these the rebuilt surface has no
+# normal data and the billow gets no shading, which is what made it invisible
+# in the 2026-08-13 playtest.
+func _compute_smooth_normals(vertices: PackedVector3Array, indices: PackedInt32Array) -> PackedVector3Array:
+	var normals := PackedVector3Array()
+	normals.resize(vertices.size())
+	for triangle_start in range(0, indices.size(), 3):
+		var a := indices[triangle_start]
+		var b := indices[triangle_start + 1]
+		var c := indices[triangle_start + 2]
+		var face := (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a])
+		normals[a] += face
+		normals[b] += face
+		normals[c] += face
+	for index in range(normals.size()):
+		var normal := normals[index]
+		normals[index] = normal.normalized() if normal.length_squared() > 0.000001 else Vector3(0.0, 0.0, 1.0)
+	return normals
+
+
+func _make_flag_mesh(size: Vector2) -> ArrayMesh:
+	var vertices := PackedVector3Array([
+		Vector3(-size.x * 0.5, -size.y * 0.5, 0.0),
+		Vector3(size.x * 0.5, -size.y * 0.5, 0.0),
+		Vector3(size.x * 0.48, size.y * 0.5, 0.08),
+		Vector3(-size.x * 0.48, size.y * 0.5, 0.08)
+	])
+	var uvs := PackedVector2Array([
+		Vector2(0.0, 1.0),
+		Vector2(1.0, 1.0),
+		Vector2(1.0, 0.0),
+		Vector2(0.0, 0.0)
+	])
+	var indices := PackedInt32Array([0, 1, 2, 0, 2, 3])
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -302,10 +413,6 @@ func _make_sail_mesh(sail_type: String, size: Vector2) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
-
-
-func _make_flag_mesh(size: Vector2) -> ArrayMesh:
-	return _make_sail_mesh("square", size)
 
 
 func _make_bow_mesh(width: float, height: float, length: float) -> ArrayMesh:

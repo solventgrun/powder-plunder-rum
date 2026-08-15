@@ -97,3 +97,4 @@ func _process(_delta: float) -> void:
 
 	if wind_indicator and wind_system:
 		wind_indicator.set("wind_direction_degrees", wind_system.wind_direction_degrees)
+		wind_indicator.set("heading_degrees", values.heading)

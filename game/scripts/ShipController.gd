@@ -9,7 +9,7 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 @export var ship_type_id: String = "brig"
 
 @onready var sailing_model: Node = $SailingModel
-@onready var ship_visuals: Node = $ShipVisualBuilder
+@onready var ship_visuals: Node = $VisualRoot/ShipVisualBuilder
 @onready var combat: Node = $ShipCombatComponent
 @onready var broadside_controller: Node = $BroadsideController
 

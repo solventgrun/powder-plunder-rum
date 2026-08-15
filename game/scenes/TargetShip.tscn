@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://targetshipproto"]
+[gd_scene load_steps=14 format=3 uid="uid://targetshipproto"]
 
 [ext_resource type="Script" path="res://game/scripts/EnemyShipController.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="2_visual"]
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://game/scenes/Cannonball.tscn" id="5_cannonball"]
 [ext_resource type="Script" path="res://game/scripts/combat/CannonBoomPlayer.gd" id="6_boom"]
 [ext_resource type="Script" path="res://game/scripts/combat/ShipCombatComponent.gd" id="7_combat"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWaveMotion.gd" id="8_wave"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWake.gd" id="9_wake"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
 size = Vector3(1.45, 0.55, 3.25)
@@ -24,23 +26,31 @@ albedo_color = Color(0.22, 0.2, 0.16, 1)
 [node name="TargetShip" type="CharacterBody3D"]
 script = ExtResource("1_enemy")
 
-[node name="Hull" type="MeshInstance3D" parent="."]
+[node name="VisualRoot" type="Node3D" parent="."]
+script = ExtResource("8_wave")
+
+[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 mesh = SubResource("BoxMesh_hull")
 surface_material_override/0 = SubResource("StandardMaterial3D_target")
 
-[node name="Bow" type="MeshInstance3D" parent="."]
+[node name="Bow" type="MeshInstance3D" parent="VisualRoot"]
 transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.35, -2.0)
 mesh = SubResource("PrismMesh_bow")
 surface_material_override/0 = SubResource("StandardMaterial3D_target")
 
-[node name="Mast" type="MeshInstance3D" parent="."]
+[node name="Mast" type="MeshInstance3D" parent="VisualRoot"]
 transform = Transform3D(0.18, 0, 0, 0, 2.4, 0, 0, 0, 0.18, 0, 1.35, -0.15)
 mesh = SubResource("BoxMesh_hull")
 surface_material_override/0 = SubResource("StandardMaterial3D_target")
 
-[node name="ShipVisualBuilder" type="Node3D" parent="."]
+[node name="ShipVisualBuilder" type="Node3D" parent="VisualRoot"]
 script = ExtResource("2_visual")
+
+[node name="ShipWake" type="Node3D" parent="."]
+script = ExtResource("9_wake")
+stern_point = Vector3(0, 0, 2.0)
+bow_point = Vector3(0, 0.3, -2.3)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.15)

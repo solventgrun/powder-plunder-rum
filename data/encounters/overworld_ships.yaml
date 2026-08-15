@@ -1,0 +1,56 @@
+overworld_ships:
+  - id: spanish_patrol_jamaica_south
+    name: Spanish Patrol
+    faction: spain
+    ship_type: brig
+    visual_variant: patrol
+    sail_set: full
+    crew: 95
+    cargo_weight: 8
+    start_x: -4
+    start_z: 58
+    route:
+      - x: -4
+        z: 58
+      - x: 34
+        z: 62
+      - x: 70
+        z: 50
+      - x: 42
+        z: 76
+    broadsides:
+      port:
+        cannons:
+          - light_4_pounder
+          - light_4_pounder
+      starboard:
+        cannons:
+          - light_4_pounder
+          - light_4_pounder
+
+  - id: dutch_trader_west_jamaica
+    name: Dutch Trader
+    faction: dutch
+    ship_type: sloop
+    visual_variant: trader
+    sail_set: full
+    crew: 45
+    cargo_weight: 12
+    start_x: -54
+    start_z: 52
+    route:
+      - x: -54
+        z: 52
+      - x: -84
+        z: 30
+      - x: -72
+        z: 4
+      - x: -38
+        z: 34
+    broadsides:
+      port:
+        cannons:
+          - light_4_pounder
+      starboard:
+        cannons:
+          - light_4_pounder

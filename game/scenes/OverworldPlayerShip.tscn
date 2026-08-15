@@ -1,0 +1,56 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://game/scripts/overworld/OverworldPlayerShip.gd" id="1_player"]
+[ext_resource type="Script" path="res://game/scripts/SailingModel.gd" id="2_sail"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="3_visual"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWaveMotion.gd" id="4_wave"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWake.gd" id="5_wake"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_hull"]
+size = Vector3(1.4, 0.45, 2.8)
+
+[sub_resource type="PrismMesh" id="PrismMesh_bow"]
+left_to_right = 1.4
+size = Vector3(1.4, 0.45, 0.9)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ship"]
+size = Vector3(1.4, 0.6, 3.1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_player"]
+albedo_color = Color(0.46, 0.2, 0.08, 1)
+
+[node name="OverworldPlayerShip" type="CharacterBody3D"]
+script = ExtResource("1_player")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+script = ExtResource("4_wave")
+
+[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("BoxMesh_hull")
+surface_material_override/0 = SubResource("StandardMaterial3D_player")
+
+[node name="Bow" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.35, -1.75)
+mesh = SubResource("PrismMesh_bow")
+surface_material_override/0 = SubResource("StandardMaterial3D_player")
+
+[node name="Mast" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(0.14, 0, 0, 0, 1.8, 0, 0, 0, 0.14, 0, 1.15, -0.1)
+mesh = SubResource("BoxMesh_hull")
+surface_material_override/0 = SubResource("StandardMaterial3D_player")
+
+[node name="ShipVisualBuilder" type="Node3D" parent="VisualRoot"]
+script = ExtResource("3_visual")
+
+[node name="ShipWake" type="Node3D" parent="."]
+script = ExtResource("5_wake")
+stern_point = Vector3(0, 0, 1.7)
+bow_point = Vector3(0, 0.28, -2.0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.1)
+shape = SubResource("BoxShape3D_ship")
+
+[node name="SailingModel" type="Node" parent="."]
+script = ExtResource("2_sail")

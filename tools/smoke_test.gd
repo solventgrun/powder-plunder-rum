@@ -1,6 +1,7 @@
 extends SceneTree
 
 const NAVAL_BATTLE_SCENE_PATH := "res://game/scenes/NavalBattle.tscn"
+const OVERWORLD_SCENE_PATH := "res://game/scenes/Overworld.tscn"
 const SAILING_MODEL_PATH := "res://game/scripts/SailingModel.gd"
 const ContentValidator := preload("res://game/scripts/content/ContentValidator.gd")
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
@@ -16,8 +17,11 @@ func _run() -> void:
 
 	_test_content_validation(failures)
 	_test_ship_stats(failures)
+	_test_overworld_ship_records(failures)
 	_test_sailing_model(failures)
 	_test_wind_strength_factor(failures)
+	await _test_overworld_scene_loads(failures)
+	await _test_naval_battle_uses_overworld_encounter(failures)
 	await _test_main_scene_moves_ship(failures)
 	await _test_broadside_side_behavior(failures)
 	await _test_asymmetric_ship_loadout(failures)
@@ -35,7 +39,7 @@ func _run() -> void:
 	await _test_target_sinks_at_zero_hull(failures)
 
 	if failures.is_empty():
-		print("Smoke test passed: sailing, content, ship stats/mods, target ship config, ship loadouts, broadside behavior, enemy fire, ammo cooldown, projectile splash, impact flash, armament damage, sail/crew/morale damage, mast break, crew firing limits, target AI test toggles, burning, self-ignition, magazine explosion, sinking, and target damage.")
+		print("Smoke test passed: overworld scene, overworld encounters, encounter battle handoff, sailing, content, ship stats/mods, target ship config, ship loadouts, broadside behavior, enemy fire, ammo cooldown, projectile splash, impact flash, armament damage, sail/crew/morale damage, mast break, crew firing limits, target AI test toggles, burning, self-ignition, magazine explosion, sinking, and target damage.")
 		quit(0)
 	else:
 		for failure in failures:
@@ -189,6 +193,106 @@ func _test_ship_stats(failures: Array[String]) -> void:
 		failures.append("Ships around 90% load should be significantly slower than heavy ships.")
 
 
+func _test_overworld_ship_records(failures: Array[String]) -> void:
+	var records := ContentCatalog.load_overworld_ship_records()
+	if records.size() < 2:
+		failures.append("Milestone 3 overworld should include multiple test NPC ships.")
+	for record in records:
+		if not record.has("route") or not record.route is Array or record.route.size() < 2:
+			failures.append("Overworld ship '%s' should define a looping route with at least two waypoints." % str(record.get("id", "")))
+		if not record.get("broadsides", {}) is Dictionary:
+			failures.append("Overworld ship '%s' should carry battle-ready broadside data." % str(record.get("id", "")))
+
+
+func _test_overworld_scene_loads(failures: Array[String]) -> void:
+	var packed := load(OVERWORLD_SCENE_PATH)
+	if packed == null:
+		failures.append("Could not load overworld scene.")
+		return
+
+	var scene: Node = packed.instantiate()
+	if scene == null:
+		failures.append("Could not instantiate overworld scene.")
+		return
+
+	root.add_child(scene)
+	_disable_battle_auto_return(scene)
+	await process_frame
+	await physics_frame
+
+	if scene.get_node_or_null("JamaicaIsland") == null:
+		failures.append("Overworld should contain a JamaicaIsland landmass.")
+	if scene.get_node_or_null("JamaicaIsland/LandCollision") == null:
+		failures.append("JamaicaIsland should create a land collision shape.")
+	if scene.get_node_or_null("PortRoyal") == null:
+		failures.append("Overworld should include a Port Royal marker.")
+	if scene.get_node_or_null("PlayerShip") == null:
+		failures.append("Overworld should include a player ship.")
+	else:
+		var player := scene.get_node_or_null("PlayerShip") as Node3D
+		var player_stats := ContentCatalog.load_player_ship_stats()
+		if player.scale.x <= float(player_stats.get("visual_scale")):
+			failures.append("Overworld player ship should be scaled up for map readability.")
+		if player.get_node_or_null("VisualRoot/ShipVisualBuilder/GeneratedVisuals") == null:
+			failures.append("Overworld player ship should use generated ship-type visuals.")
+	if scene.get_node_or_null("Debug/Compass") == null:
+		failures.append("Overworld should include a compass and wind indicator.")
+	if scene.has_method("_get_intercept_range") and scene.get_node_or_null("PlayerShip"):
+		var player_ship := scene.get_node_or_null("PlayerShip") as Node3D
+		var sample_range: float = scene.call("_get_intercept_range", player_ship, player_ship)
+		if sample_range <= float(scene.get("intercept_distance")):
+			failures.append("Overworld intercept range should account for visible ship scale, not just center distance.")
+
+	var npc_count := 0
+	for child in scene.get_children():
+		if child.has_method("configure") and child.get("encounter_record") is Dictionary:
+			npc_count += 1
+	if npc_count < 2:
+		failures.append("Overworld should spawn multiple NPC ships from encounter records.")
+	for child in scene.get_children():
+		if child.has_method("configure") and child.get("encounter_record") is Dictionary:
+			if child.get_node_or_null("VisualRoot/ShipVisualBuilder/GeneratedVisuals") == null:
+				failures.append("Overworld NPC '%s' should use generated ship-type visuals." % child.name)
+
+	_free_scene(scene)
+
+
+func _test_naval_battle_uses_overworld_encounter(failures: Array[String]) -> void:
+	var records := ContentCatalog.load_overworld_ship_records()
+	if records.is_empty():
+		failures.append("Encounter handoff test needs at least one overworld ship record.")
+		return
+	var session := root.get_node_or_null("GameSession")
+	if session == null:
+		failures.append("Encounter handoff test could not find GameSession autoload.")
+		return
+
+	session.set("selected_encounter", records[0].duplicate(true))
+	var packed := load(NAVAL_BATTLE_SCENE_PATH)
+	if packed == null:
+		failures.append("Could not load naval battle scene for encounter handoff.")
+		session.set("selected_encounter", {})
+		return
+
+	var scene: Node = packed.instantiate()
+	_disable_battle_auto_return(scene)
+	root.add_child(scene)
+	await process_frame
+	await physics_frame
+
+	var target := scene.get_node_or_null("TargetShip")
+	if target == null:
+		failures.append("Encounter handoff battle should include TargetShip.")
+	else:
+		if target.get("ship_type_id") != str(records[0].get("ship_type", "")):
+			failures.append("TargetShip should use selected overworld encounter ship_type.")
+		if str(target.get("ship_loadout").get("faction", "")) != str(records[0].get("faction", "")):
+			failures.append("TargetShip should use selected overworld encounter faction.")
+
+	session.set("selected_encounter", {})
+	_free_scene(scene)
+
+
 func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	var packed := load(NAVAL_BATTLE_SCENE_PATH)
 	if packed == null:
@@ -201,6 +305,7 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		return
 
 	root.add_child(scene)
+	_disable_battle_auto_return(scene)
 	await process_frame
 	await physics_frame
 	_disable_target_ai(scene)
@@ -224,7 +329,7 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 	if ocean == null:
 		failures.append("Main scene does not contain Ocean.")
 	else:
-		var player_hull_for_waterline := ship.get_node_or_null("Hull") as MeshInstance3D
+		var player_hull_for_waterline := ship.get_node_or_null("VisualRoot/Hull") as MeshInstance3D
 		if player_hull_for_waterline:
 			var hull_top := player_hull_for_waterline.global_position.y + player_hull_for_waterline.mesh.get_aabb().size.y * ship.scale.y * 0.5
 			if ocean.global_position.y >= hull_top:
@@ -240,12 +345,12 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		var hitbox_world_scale := target_collision.global_transform.basis.get_scale().x
 		if not hitbox_world_scale > target.scale.x:
 			failures.append("Small target ships should have a modest cannon-hit forgiveness collider.")
-	var player_hull := ship.get_node_or_null("Hull") as MeshInstance3D
-	var target_hull := target.get_node_or_null("Hull") as MeshInstance3D
-	var player_bow := ship.get_node_or_null("Bow") as MeshInstance3D
-	var target_bow := target.get_node_or_null("Bow") as MeshInstance3D
-	var player_mast := ship.get_node_or_null("Mast") as MeshInstance3D
-	var target_mast := target.get_node_or_null("Mast") as MeshInstance3D
+	var player_hull := ship.get_node_or_null("VisualRoot/Hull") as MeshInstance3D
+	var target_hull := target.get_node_or_null("VisualRoot/Hull") as MeshInstance3D
+	var player_bow := ship.get_node_or_null("VisualRoot/Bow") as MeshInstance3D
+	var target_bow := target.get_node_or_null("VisualRoot/Bow") as MeshInstance3D
+	var player_mast := ship.get_node_or_null("VisualRoot/Mast") as MeshInstance3D
+	var target_mast := target.get_node_or_null("VisualRoot/Mast") as MeshInstance3D
 	if player_hull == null or target_hull == null or player_bow == null or target_bow == null or player_mast == null or target_mast == null:
 		failures.append("Player and target ships should share the same primitive hull, bow, and mast parts.")
 	else:
@@ -255,8 +360,8 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 			failures.append("Same-type player and target ships should start from matching base hull dimensions.")
 		if player_bow.rotation_degrees.length() > 0.001 or target_bow.rotation_degrees.length() > 0.001:
 			failures.append("Generated bow meshes should point forward without scene-level rotation hacks.")
-	var player_visuals := ship.get_node_or_null("ShipVisualBuilder/GeneratedVisuals")
-	var target_visuals := target.get_node_or_null("ShipVisualBuilder/GeneratedVisuals")
+	var player_visuals := ship.get_node_or_null("VisualRoot/ShipVisualBuilder/GeneratedVisuals")
+	var target_visuals := target.get_node_or_null("VisualRoot/ShipVisualBuilder/GeneratedVisuals")
 	if player_visuals == null or _count_children_with_prefix(player_visuals, "Flag_") <= 0:
 		failures.append("Player generated visuals should include at least one visible flag node.")
 	else:
@@ -303,6 +408,7 @@ func _test_cannon_hits_target(failures: Array[String]) -> void:
 		return
 
 	root.add_child(scene)
+	_disable_battle_auto_return(scene)
 	await process_frame
 	await physics_frame
 	_disable_target_ai(scene)
@@ -735,8 +841,8 @@ func _test_projectile_range_independent_of_ship_scale(failures: Array[String]) -
 		failures.append("Scaled-source projectile should splash after reaching max range.")
 	else:
 		var splash_distance := Vector2(start_position.x, start_position.z).distance_to(Vector2(splash_position.x, splash_position.z))
-		if absf(splash_distance - 96.0) > 2.0:
-			failures.append("Long 12-pounder round shot should travel about 96 units from a sloop-sized source. Saw %.2f." % splash_distance)
+		if absf(splash_distance - 72.0) > 2.0:
+			failures.append("Long 12-pounder round shot should travel about 72 units from a sloop-sized source. Saw %.2f." % splash_distance)
 
 	_free_scene(scene)
 
@@ -820,6 +926,12 @@ func _test_fire_status_effects(failures: Array[String]) -> void:
 	if target.get("burning_severity") != "large":
 		failures.append("Burning status should be able to grow on its own over time.")
 
+	# Fire growth re-reads the level config, re-arming the explosion chance
+	# zeroed above; zero it again (and stop further growth) so the target
+	# cannot randomly magazine-explode during the burn-damage window.
+	target.set("burning_growth_chance_per_second", 0.0)
+	target.set("burning_magazine_explosion_chance_per_second", 0.0)
+
 	for index in range(30):
 		await process_frame
 
@@ -838,6 +950,12 @@ func _test_fire_status_effects(failures: Array[String]) -> void:
 		failures.append("Self ignition roll with 100% chance should produce burning effect.")
 
 	ship.call("apply_status_effects", rolled)
+	# Burning arms a per-second magazine-explosion chance; zero it before the
+	# frame ticks so the player cannot randomly explode and sink mid-check.
+	# Growth must go too: one hitch frame can grow the fire and re-arm the
+	# explosion chance within the same update_status call.
+	ship.set("burning_magazine_explosion_chance_per_second", 0.0)
+	ship.set("burning_growth_chance_per_second", 0.0)
 	await process_frame
 	if not ship.get("is_burning"):
 		failures.append("Player ship should be able to catch fire from self ignition.")
@@ -863,7 +981,6 @@ func _test_magazine_explosion(failures: Array[String]) -> void:
 		}
 	}
 	target.call("apply_status_effects", forced_explosion)
-	await process_frame
 	if not target.get("is_sunk"):
 		failures.append("Magazine explosion should sink/disable target immediately when forced.")
 	if not _scene_has_child_named(scene, "MagazineExplosion"):
@@ -887,6 +1004,10 @@ func _instantiate_main_scene(failures: Array[String], test_name: String) -> Node
 	await process_frame
 	await physics_frame
 	_disable_target_ai(scene)
+	# A randomly sunk ship must never trigger GameSession's battle-end scene
+	# change mid-suite: autoloads ARE instanced in --script mode, and a live
+	# current_scene would leak state across tests.
+	_disable_battle_auto_return(scene)
 	return scene
 
 
@@ -942,3 +1063,8 @@ func _disable_target_ai(scene: Node) -> void:
 	if target:
 		target.set("ai_enabled", false)
 		target.set("firing_enabled", false)
+
+
+func _disable_battle_auto_return(scene: Node) -> void:
+	if scene.has_method("_check_result") or scene.get("auto_return_to_overworld") != null:
+		scene.set("auto_return_to_overworld", false)

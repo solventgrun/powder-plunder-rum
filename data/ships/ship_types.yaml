@@ -57,7 +57,7 @@ ship_types:
       max_morale: 100
       magazine_explosion_multiplier: 0.8
       usable_load_capacity: 220
-      gun_ports: 28
+      gun_ports: 34
 
   - id: galleon
     name: Galleon
@@ -77,4 +77,4 @@ ship_types:
       max_morale: 100
       magazine_explosion_multiplier: 0.55
       usable_load_capacity: 300
-      gun_ports: 36
+      gun_ports: 40

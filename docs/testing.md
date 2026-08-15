@@ -137,6 +137,17 @@ Fires can also grow on their own. The debug UI should progress from `BURNING (sm
 
 ## Editor Checks
 
+Open [game/scenes/Overworld.tscn](../game/scenes/Overworld.tscn), run the game, and try:
+
+- sail around Jamaica and confirm the ship cannot pass through land
+- use the compass to compare heading against the ship's visual direction
+- confirm the wind arrow stays fixed while the ship turns
+- sail near an NPC route and press `Enter` when the intercept prompt appears
+- confirm the battle target matches the intercepted NPC's faction and ship type
+- sink the target and confirm the game returns to the overworld
+
+For direct battle testing:
+
 Open [game/scenes/NavalBattle.tscn](../game/scenes/NavalBattle.tscn), run the game, and try:
 
 - fire port broadside at long range

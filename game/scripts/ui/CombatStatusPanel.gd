@@ -21,41 +21,50 @@ func _draw() -> void:
 	if player == null or target == null:
 		return
 
+	# Player status only: enemy strength stays a mystery (user call 2026-08-14).
 	var panel_position := Vector2(size.x - 258.0, 166.0)
-	var bar_size := Vector2(220.0, 14.0)
-	var target_name := str(target.get("ship_display_name"))
-	if target_name.is_empty():
-		target_name = "Enemy Ship"
-	draw_string(get_theme_default_font(), panel_position, target_name, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color(0.96, 0.93, 0.78, 0.98))
-	_draw_fraction_bar(panel_position + Vector2(0.0, 18.0), bar_size, "HULL", target.call("get_hull_fraction"), Color(0.74, 0.16, 0.12, 0.95))
-	_draw_fraction_bar(panel_position + Vector2(0.0, 40.0), bar_size, "SAIL", target.call("get_sail_fraction"), Color(0.22, 0.62, 0.9, 0.95))
-	_draw_fraction_bar(panel_position + Vector2(0.0, 62.0), bar_size, "CREW", target.call("get_crew_fraction"), Color(0.9, 0.72, 0.24, 0.95))
+	var ship_name := "Your Ship"
+	var stats: Resource = player.get("ship_stats")
+	if stats:
+		ship_name = str(stats.get("display_name"))
+	HudStyle.draw_panel(self, Rect2(panel_position + Vector2(-14.0, -26.0), Vector2(248.0, 118.0)))
+	draw_string(get_theme_default_font(), panel_position, ship_name, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, HudStyle.GOLD)
+	_draw_fraction_bar(panel_position + Vector2(0.0, 20.0), "HULL", player.call("get_hull_fraction"), Color(0.74, 0.16, 0.12, 0.95))
+	_draw_fraction_bar(panel_position + Vector2(0.0, 44.0), "SAIL", player.call("get_sail_fraction"), Color(0.22, 0.62, 0.9, 0.95))
+	_draw_fraction_bar(panel_position + Vector2(0.0, 68.0), "CREW", player.call("get_crew_fraction"), Color(0.9, 0.72, 0.24, 0.95))
 
 	var notice := ""
-	var notice_color := Color(0.96, 0.9, 0.68, 0.98)
+	var notice_color := HudStyle.PARCHMENT
 	if bool(player.get("is_sunk")):
 		notice = "YOUR VESSEL WAS SUNK"
-		notice_color = Color(0.9, 0.16, 0.12, 0.98)
+		notice_color = Color(0.9, 0.2, 0.14, 0.98)
 	elif bool(target.get("is_sunk")):
 		notice = "ENEMY VESSEL SUNK"
-		notice_color = Color(0.92, 0.78, 0.22, 0.98)
+		notice_color = Color(0.95, 0.8, 0.3, 0.98)
 	elif bool(player.get("is_mast_broken")):
 		notice = "MAST BROKEN"
-		notice_color = Color(0.9, 0.72, 0.22, 0.98)
+		notice_color = Color(0.92, 0.74, 0.26, 0.98)
 
 	if not notice.is_empty():
 		var font := get_theme_default_font()
 		var font_size := 30
 		var text_size := font.get_string_size(notice, HORIZONTAL_ALIGNMENT_CENTER, -1.0, font_size)
 		var center := size * 0.5
-		var rect := Rect2(center - text_size * 0.5 - Vector2(22.0, 16.0), text_size + Vector2(44.0, 32.0))
-		draw_rect(rect, Color(0.02, 0.025, 0.03, 0.82), true)
-		draw_rect(rect, notice_color.darkened(0.35), false, 2.0)
+		var rect := Rect2(center - text_size * 0.5 - Vector2(26.0, 18.0), text_size + Vector2(52.0, 36.0))
+		HudStyle.draw_panel(self, rect)
 		draw_string(font, Vector2(center.x - text_size.x * 0.5, center.y + text_size.y * 0.25), notice, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, notice_color)
 
 
-func _draw_fraction_bar(position: Vector2, bar_size: Vector2, label: String, fraction: float, fill_color: Color) -> void:
+# Label column left of the bar (playtest: labels drawn over the bars were
+# hard to read), percent inside the bar with a drop shadow.
+func _draw_fraction_bar(row_position: Vector2, label: String, fraction: float, fill_color: Color) -> void:
+	var font := get_theme_default_font()
 	var clamped := clampf(fraction, 0.0, 1.0)
-	draw_rect(Rect2(position, bar_size), Color(0.03, 0.035, 0.04, 0.82), true)
-	draw_rect(Rect2(position + Vector2(2.0, 2.0), Vector2((bar_size.x - 4.0) * clamped, bar_size.y - 4.0)), fill_color, true)
-	draw_string(get_theme_default_font(), position + Vector2(0.0, -3.0), "%s %.0f%%" % [label, clamped * 100.0], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, Color(0.96, 0.98, 1.0, 0.95))
+	var bar_rect := Rect2(row_position + Vector2(52.0, 0.0), Vector2(168.0, 15.0))
+	draw_string(font, row_position + Vector2(0.0, 12.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, HudStyle.PARCHMENT)
+	HudStyle.draw_bar(self, bar_rect, clamped, fill_color)
+	var percent := "%.0f%%" % (clamped * 100.0)
+	var text_size := font.get_string_size(percent, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10)
+	var text_position := Vector2(bar_rect.position.x + bar_rect.size.x - text_size.x - 5.0, bar_rect.position.y + 11.5)
+	draw_string(font, text_position + Vector2(1.0, 1.0), percent, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color(0.0, 0.0, 0.0, 0.7))
+	draw_string(font, text_position, percent, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, HudStyle.PARCHMENT)

@@ -20,7 +20,7 @@ No .NET runtime, C#, GDExtension, database, service, or external dependency is r
 
 1. Open this `pirates` folder in Godot.
 2. Run the project.
-3. The main scene is `res://game/scenes/NavalBattle.tscn`.
+3. The main scene is `res://game/scenes/Overworld.tscn`.
 
 ## Automated Smoke Test
 
@@ -52,10 +52,13 @@ Content validation fails on missing or invalid required fields. Unknown fields p
 - `2`: select Chain Shot
 - `3`: select Grape Shot
 - `4`: select Fire Shot
+- `Enter`: intercept a nearby overworld ship
 - `[` / `]`: decrease / increase wind strength
 - `,` / `.`: rotate wind direction
 
 The boat accelerates based on wind direction, sail trim, and heading. Sailing into the wind is weak; crosswind and downwind sailing are stronger.
+
+The overworld currently starts near Jamaica with Port Royal marked as a simple town marker. NPC ships follow looping routes from `data/encounters/overworld_ships.yaml`; intercepting one loads `res://game/scenes/NavalBattle.tscn` with that NPC's ship record.
 
 Changing ammo immediately puts both broadsides into reload cooldown, representing the crew shifting shot types.
 

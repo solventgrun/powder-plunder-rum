@@ -159,7 +159,7 @@ func break_mast() -> void:
 	if owner_3d:
 		if owner_3d is CharacterBody3D:
 			(owner_3d as CharacterBody3D).velocity = Vector3.ZERO
-		var mast := owner_3d.get_node_or_null("Mast") as MeshInstance3D
+		var mast := owner_3d.get_node_or_null("VisualRoot/Mast") as MeshInstance3D
 		if mast:
 			mast.rotation_degrees.z = 72.0
 			mast.position.y = maxf(0.45, mast.position.y * 0.45)
@@ -218,7 +218,10 @@ func _apply_burning(severity: String) -> void:
 		var owner_3d := get_parent() as Node3D
 		flame_visual = BurningFlameScene.instantiate() as Node3D
 		if owner_3d and flame_visual:
-			owner_3d.add_child(flame_visual)
+			var flame_anchor := owner_3d.get_node_or_null("VisualRoot") as Node3D
+			if flame_anchor == null:
+				flame_anchor = owner_3d
+			flame_anchor.add_child(flame_visual)
 			flame_visual.position = visual_node.call("get_fire_socket_position", "deck_fire_main", Vector3(0.0, 0.65, 0.0)) if visual_node else Vector3(0.0, 0.65, 0.0)
 	if flame_visual:
 		flame_visual.scale = Vector3.ONE * float(level.get("visual_scale", 1.0))
@@ -347,8 +350,9 @@ func _explode() -> void:
 
 
 func _get_effect_spawn_parent() -> Node:
-	if get_tree().current_scene:
-		return get_tree().current_scene
+	# Spawn effects as siblings of the ship, not under current_scene, which
+	# can point at a different scene than the ship's (test harness scenes,
+	# the battle-end scene-change window).
 	var owner_node := get_parent()
 	if owner_node and owner_node.get_parent():
 		return owner_node.get_parent()

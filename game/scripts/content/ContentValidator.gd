@@ -22,6 +22,8 @@ const FACTION_FIELDS := ["id", "name", "flag", "sail_palette"]
 const FLAG_FIELDS := ["id", "name", "pattern", "primary_color", "secondary_color", "accent_color"]
 const ENVIRONMENT_CONDITION_FIELDS := ["id", "name", "wind"]
 const ENVIRONMENT_WIND_FIELDS := ["direction_degrees", "strength", "reference_strength"]
+const OVERWORLD_SHIP_FIELDS := ["id", "name", "faction", "ship_type", "visual_variant", "sail_set", "crew", "cargo_weight", "start_x", "start_z", "route", "modifications", "broadsides"]
+const OVERWORLD_ROUTE_FIELDS := ["x", "z"]
 const SHIP_MODIFICATION_FIELDS := ["id", "name", "modifiers"]
 const SHIP_MODIFIERS_FIELDS := ["sailing", "combat"]
 const SHIP_MODIFIER_SAILING_FIELDS := ["max_speed_multiplier", "acceleration_multiplier", "deceleration_multiplier", "turn_rate_multiplier", "minimum_turn_rate_multiplier", "sail_trim_speed_multiplier"]
@@ -49,6 +51,7 @@ static func validate_all() -> Dictionary:
 	validate_ship_modifications(ContentCatalog.load_ship_modification_records(), errors, warnings)
 	validate_player_ship(ContentCatalog.load_player_ship_record(), ContentCatalog.load_cannon_types(), ship_types, ship_modifications, factions, errors, warnings)
 	validate_target_ship(ContentCatalog.load_target_ship_record(), ship_types, ship_modifications, factions, errors, warnings)
+	validate_overworld_ships(ContentCatalog.load_overworld_ship_records(), ship_types, ship_modifications, factions, errors, warnings)
 
 	return {
 		"errors": errors,
@@ -338,6 +341,40 @@ static func validate_target_ship(record: Dictionary, ship_types: Dictionary, shi
 			errors.append("target_ship cargo_weight %.1f exceeds %s usable_load_capacity %.1f." % [cargo_weight, ship_type_id, capacity])
 
 
+static func validate_overworld_ships(records: Array[Dictionary], ship_types: Dictionary, ship_modifications: Dictionary, factions: Dictionary, errors: Array[String], warnings: Array[String]) -> void:
+	_validate_records_present("overworld_ships", records, errors)
+	_validate_unique_ids("overworld_ships", records, errors)
+	for index in range(records.size()):
+		var record := records[index]
+		var label := _record_label("overworld_ships", index, record)
+		_warn_unknown_fields(label, record, OVERWORLD_SHIP_FIELDS, warnings)
+		_validate_required_fields(label, record, ["id", "name", "faction", "ship_type", "start_x", "start_z", "route", "broadsides"], errors)
+		_validate_id(label, record.get("id", ""), errors)
+		_validate_non_negative_number(label, record, "crew", errors)
+		_validate_non_negative_number(label, record, "cargo_weight", errors)
+		_validate_number(label, record, "start_x", errors)
+		_validate_number(label, record, "start_z", errors)
+		_validate_ship_type_and_modifications(label, record, ship_types, ship_modifications, errors)
+		_validate_faction_reference(label, record, factions, errors)
+		_validate_optional_ship_broadsides(label, record, ContentCatalog.load_cannon_types(), ship_types, errors, warnings)
+		if not record.get("route") is Array:
+			errors.append("%s route must be a list." % label)
+		else:
+			var route: Array = record.get("route")
+			if route.size() < 2:
+				errors.append("%s route must include at least two waypoints for a loop." % label)
+			for route_index in range(route.size()):
+				var waypoint = route[route_index]
+				var waypoint_label := "%s route[%d]" % [label, route_index]
+				if not waypoint is Dictionary:
+					errors.append("%s must be a mapping." % waypoint_label)
+					continue
+				_warn_unknown_fields(waypoint_label, waypoint, OVERWORLD_ROUTE_FIELDS, warnings)
+				_validate_required_fields(waypoint_label, waypoint, OVERWORLD_ROUTE_FIELDS, errors)
+				_validate_number(waypoint_label, waypoint, "x", errors)
+				_validate_number(waypoint_label, waypoint, "z", errors)
+
+
 static func _validate_optional_ship_broadsides(label_prefix: String, record: Dictionary, cannon_types: Dictionary, ship_types: Dictionary, errors: Array[String], warnings: Array[String]) -> void:
 	if not record.has("broadsides"):
 		return
@@ -492,6 +529,13 @@ static func _validate_non_negative_number(label: String, record: Dictionary, fie
 		return
 	if float(record[field]) < 0.0:
 		errors.append("%s field '%s' must be zero or greater." % [label, field])
+
+
+static func _validate_number(label: String, record: Dictionary, field: String, errors: Array[String]) -> void:
+	if not record.has(field):
+		return
+	if not _is_number(record[field]):
+		errors.append("%s field '%s' must be numeric." % [label, field])
 
 
 static func _validate_unit_number(label: String, record: Dictionary, field: String, errors: Array[String]) -> void:
