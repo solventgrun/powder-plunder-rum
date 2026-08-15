@@ -2,7 +2,7 @@
 
 Adapted 2026-08-14 from the user-supplied "Ship Asset Generation Pipeline" document (2D sprite edition). That document's process skeleton — agent-orchestrated deterministic tools, a versioned art contract, one-ship proof before fleet scale-out, measurable review criteria — is preserved here. Its output format is not: it targeted 8-heading pre-rendered sprites, which would discard this game's 3D wave motion (bob/pitch/roll/heel from `ShipWaveMotion`), continuous rotation, dynamic sail billow, and two scenes with different camera elevations. This version produces **game-ready segmented 3D models (glTF)** instead.
 
-Status: **design, not yet started.** Adopting this pipeline is the "hand-made ship model" exception to the procedural-only rule (see North Star in `visual-improvement-plan.md`) and starts only on explicit user go-ahead. Current agreed priority: ocean pass (done) → Tier 4 UI theme → this pilot.
+Status: **pilot complete and signed off (2026-08-15).** The pilot class was the **galleon** (user call — the hero ship, not a small class as the MVP table below assumed), built end to end by the deterministic generator `artifacts/blender_first_hull/create_galleon_hull.py` + `build_galleon_glb.py` → `assets/models/galleon.glb` → `GalleonVisual.tscn` → ShipVisualBuilder `mode: mesh`, and playtest-approved in battle ("proved the pipeline end to end"). Full history in `galleon-sails-rigging-plan.md`; decisions in ADR 0010 — sails are **model geometry**, not procedural attachments (see the superseded hybrid rule below), and flat export materials were accepted at gameplay distance (no bake pass). **Next: fleet scale-out** — the remaining ship classes go through this pipeline, which is when the deferred generalization (spec YAML, `assets/ships/` layout, validation script, M7–M8) gets built.
 
 ## Design principle
 
@@ -13,7 +13,7 @@ The agent is the orchestrator, not the artist of record. It drives deterministic
 ## Goals
 
 - One canonical 3D source per ship class, convincing from the actual gameplay cameras (battle follow camera and overworld oblique camera — both, since the model is live 3D).
-- Full compatibility with existing runtime systems: wave motion, heel, procedural sails, wakes, faction recolor, damage states, mast break, fire sockets.
+- Full compatibility with existing runtime systems: wave motion, heel, sail tint/trim/mast-break plumbing, wakes, faction recolor, damage states, fire sockets.
 - Chunky silhouettes readable at 1080p gameplay zoom, per the North Star. Stylized, not photoreal.
 - A repeatable build: art-direction change → re-run → whole fleet updates.
 - Deterministic naming, scale, orientation, pivots, and import settings, mechanically validated.
@@ -22,19 +22,15 @@ The agent is the orchestrator, not the artist of record. It drives deterministic
 ## Non-goals
 
 - Film-quality models or universal geometric correctness — only the game cameras matter.
-- Rigged/simulated cloth sails (see the hybrid rule below).
+- Rigged/simulated cloth sails — modeled sails bake a static wind fill (ADR 0010); no cloth sim or armatures.
 - Replacing the engine's transient effects with baked geometry.
 - Training or fine-tuning custom generative models.
 
-## The hybrid rule: model ships without sails
+## The hybrid rule — SUPERSEDED for sails (ADR 0010, 2026-08-15)
 
-Hull, masts, yards, bowsprit, railings, stern castle, and rope rigging are asset geometry. **Sails stay procedural** — `ShipVisualBuilder`'s subdivided, billowing, trim-animated sail meshes attach at sockets on the model's yards. This:
+Original rule: model ships without sails; `ShipVisualBuilder`'s procedural billowing sails attach at yard sockets. **Superseded:** sails are now modeled into the GLB — one named mesh per sail, subdivided deformable grids with moderate wind fill baked in, on a neutral tint-friendly canvas material. Rationale: the galleon is the hero visual; the concept-sheet silhouette, per-sail damage swaps, and material control want real meshes, and procedural quads beside modeled rigging would read as the weakest part of the flagship. Cost accepted: runtime billow deformation doesn't apply to mesh sails (trim degrades to scale/rotation), and mast break/faction tint are preserved by mapping the named sail meshes into the builder's existing `sail_nodes` instead of attaching procedural ones.
 
-- preserves trim/billow animation, mast-break sail hiding, and faction sail palettes with zero rework,
-- avoids cloth modeling/rigging entirely (the hardest part of a ship asset),
-- keeps one consistent canvas style across asset-based and procedural ships during the transition.
-
-Flags likewise remain procedural (runtime-generated 96x64 faction textures on flat quads at flag sockets).
+**Flags DO remain procedural** (runtime-generated 96x64 faction textures on flat quads) — the model carries decorative streamers plus `Anchor_Flag_*` empties where the existing flag system attaches, so faction swapping needs no model work.
 
 ## Toolchain
 
@@ -57,15 +53,15 @@ Keep the Phase 1 stack to Agent + Blender + Godot. Add anything else only agains
 
 **Stage 2 — Source asset construction.** Manual low-poly modeling, licensed/CC0 asset, or image-to-3D draft + cleanup. Only the game cameras must be convinced. This is the cost center — decide the sourcing route with the user per class.
 
-**Stage 3 — Blender normalization.** Import into the standard template scene. Apply: 1 Blender unit = 1 Godot meter; ship forward = **-Z**, +X = starboard (matches `ShipWaveMotion` and controller conventions); origin at the waterline center so wave bob/pitch/roll pivot correctly; apply all transforms; consistent flat-shaded/low-poly material style.
+**Stage 3 — Blender normalization.** Import into the standard template scene. Apply: 1 Blender unit = 1 Godot meter; ship forward = **-Z**, +X = starboard (matches `ShipWaveMotion` and controller conventions); origin at the waterline center so wave bob/pitch/roll pivot correctly; apply all transforms; consistent flat-shaded/low-poly material style. **Pilot caveat (paid-for lesson):** the galleon generator authors Y-up/−Z-forward *inside* Blender (Blender itself is Z-up; the render cameras compensate with a 90° roll), so glTF export must disable the exporter's default Z-up→Y-up axis conversion or the ship imports on its side. **Material caveat:** procedural node materials (noise grain, bump) flatten to base color + roughness on glTF export — plan flat/simplified export materials or a bake pass; the pilot ships flat-first (ADR 0010).
 
-**Stage 4 — Segmentation and sockets** *(replaces the 2D doc's "base render set")*. Separate and name nodes per the contract: hull group, per-mast segments (for mast break), yard sockets (procedural sail attach points), and empties for cannons, flags, fire points, stern lantern, figurehead. No merged single-mesh exports.
+**Stage 4 — Segmentation and sockets** *(replaces the 2D doc's "base render set")*. Separate and name nodes per the contract: hull part meshes, per-mast assemblies (mast, yards, sails, rigging — for mast break and future sail damage), and empties for flags and fire points. No merged single-mesh exports — but also no object spray: script-generated models must include a **join pass** collapsing decor into the contract meshes (the galleon generator emits hundreds of tiny objects; the GLB targets ≤ ~40 nodes).
 
-**Stage 5 — State variants.** Durable structural states only: damaged-hull material set or geometry swaps (scorch/holes), broken mast stumps as hidden-by-default segments. Sails are procedural, so sail states cost nothing here. Faction identity comes from material slot recolors + procedural flags/sails, not per-faction meshes.
+**Stage 5 — State variants.** Durable structural states only: damaged-hull material set or geometry swaps (scorch/holes), broken mast stumps as hidden-by-default segments, damaged sail mesh swaps (future — healthy sails only in the pilot). Faction identity comes from material slot recolors + runtime sail tint + procedural flags, not per-faction meshes.
 
 **Stage 6 — Export and mechanical validation.** Export `.glb` (glTF binary). A validation script (Blender-side Python) checks: node names against the contract, socket presence, scale/orientation, transform application, triangle budget, material slot names. Emit a manifest (source file hash, spec version, node/socket inventory).
 
-**Stage 7 — Godot integration.** Extend `ShipVisualBuilder` to hybrid mode: when a ship profile specifies a `model` source, load the `.glb` under `VisualRoot` in place of the procedural Hull/Bow/Mast/generated meshes; walk named nodes to wire mast-break segments; apply faction materials to named slots; attach procedural sails at yard sockets; read fire/flag/cannon socket positions from the empties (superseding the profile's hand-authored `visual_states`/mast position data for that class). Everything downstream — `ShipWaveMotion`, `ShipWake`, combat effects, damage flow — is untouched because it targets `VisualRoot`/body, not the meshes.
+**Stage 7 — Godot integration.** Extend `ShipVisualBuilder` to mesh mode: when a ship profile specifies `mode: mesh`, instantiate the wrapper scene (e.g. `GalleonVisual.tscn` over the imported `.glb`) under `generated_root` in place of the procedural meshes; map named `Sail_*` meshes into `sail_nodes` (faction tint, mast break, and approximate trim then work unchanged); attach the procedural flag system at `Anchor_Flag_*` empties; read fire positions from `Anchor_Fire_*` empties (superseding the profile's hand-authored `visual_states` coordinates for that class). Everything downstream — `ShipWaveMotion`, `ShipWake`, combat effects, damage flow — is untouched because it targets `VisualRoot`/body, not the meshes.
 
 **Stage 8 — In-game validation.** Smoke test must pass (structure assertions may need the hybrid node names). Probe both scenes plus `CombatEffectsProbe`; then playtest at real gameplay zoom against the review criteria. Iterate by changing the smallest upstream variable and re-running the build — never by hand-editing exported output.
 
@@ -94,10 +90,8 @@ ship_model_spec:
     masts: "Mast_{n}"          # each mast a separate segment
     mast_stumps: "MastStump_{n}"   # hidden by default; shown on mast break
   required_sockets:            # glTF empties; positions read at import
-    sails: "Socket_Sail_{mast}_{slot}"
-    flags: "Socket_Flag_{n}"
-    cannons: "Socket_Cannon_{side}_{n}"
-    fire_points: "Socket_Fire_{n}"
+    flags: "Anchor_Flag_{n}"   # sails are model meshes since ADR 0010, no sail sockets
+    fire_points: "Anchor_Fire_{n}"
   material_slots:
     faction_recolor: ["HullPaint", "Trim"]
     fixed: ["Deck", "Wood", "Rope"]
@@ -111,6 +105,10 @@ ship_model_spec:
 Why this matters (unchanged from the source doc): a convention change regenerates the fleet instead of hand-edits; every class reviews against the same target; the agent validates mechanically; special ships override fields without leaving the pipeline.
 
 ## File conventions
+
+**Pilot reality (2026-08-15):** the galleon's canonical source is the generator script `artifacts/blender_first_hull/create_galleon_hull.py` (the `.blend` and renders are derived output), and the build output goes to `assets/models/galleon.glb`. The spec YAML, validator, and the `assets/ships/<class>/` layout below are **deferred** until a second modeled ship needs shared machinery — until then the naming/material contract lives in `galleon-sails-rigging-plan.md`.
+
+Target layout when the pipeline generalizes:
 
 ```
 assets/ships/
@@ -132,9 +130,10 @@ art_direction/
 
 | Baked into the model | Stays in Godot at runtime |
 | --- | --- |
-| Hull shape, planking, trim geometry | Sails (procedural, billow/trim) |
-| Faction paint via material slots | Flags (procedural textures) |
-| Persistent hull damage state | Wake ribbon + bow spray |
+| Hull shape, planking, trim geometry | Sail faction tint + trim scaling (on model sail meshes) |
+| Sails, rigging, streamers (ADR 0010) | Flags (procedural textures at anchors) |
+| Faction paint via material slots | Wake ribbon + bow spray |
+| Persistent hull damage state | Sail hiding on mast break (`set_mast_broken`) |
 | Broken mast stumps (toggled) | Muzzle flash, cannon smoke, splashes |
 | Figurehead, lanterns, deck props | Fire, debris, magazine explosion |
 | Supernatural base materials (Dutchman) | Spectral glow/fog/particles, selection highlights |
@@ -149,7 +148,7 @@ Rule of thumb (kept verbatim in spirit): if it persists for many seconds and cha
 | Wave-motion fit | Does bob/pitch/roll/heel pivot naturally (origin at waterline, no keel float/clip)? |
 | Scale consistency | Does a sloop read smaller than a frigate without becoming unreadable? |
 | Style cohesion | Does the model sit beside procedural ships/towns without making them look broken? (the consistency cliff — judged per playtest) |
-| Sail integration | Do procedural sails attach at plausible yard positions, billow clear of rigging? |
+| Sail integration | Do the modeled sails hang plausibly from their yards, read filled at gameplay zoom, and take faction tint cleanly? |
 | Faction distinction | Do recolored slots + flags read at distance without hiding the class? |
 | Damage readability | Healthy vs damaged vs critical distinguishable mid-combat? |
 | Socket correctness | Muzzle flashes at gun ports, fire on deck, flags on masts — verified via `CombatEffectsProbe`/battle probe |
@@ -166,7 +165,7 @@ Same pipeline, spec overrides only — same axes, origin, socket contract, and i
 
 ## Minimum viable pipeline: one ship
 
-Prove it end-to-end on a single small class before any fleet work.
+Prove it end-to-end on a single class before any fleet work. **The actual pilot is the galleon** (user call, 2026-08-15), and its milestone tracking lives in `galleon-sails-rigging-plan.md` — the table below stays as the generic template. Rough mapping: M1–M2 are done in spirit (contract in the plan doc, alpha hull built), M3–M6 correspond to plan deliverables D1–D8, M7–M8 remain future.
 
 | Milestone | Exit condition |
 | --- | --- |
@@ -214,4 +213,4 @@ A build emits: the `.glb`, the manifest, a validation report, and a build log na
 
 ## Relationship to the visual improvement plan
 
-`visual-improvement-plan.md` remains the master status doc; this pipeline is referenced from its ship-detailing track. Agreed sequence: Tier 4 UI theme first (heaviest weight in the North Star image), then this pilot on user go-ahead. Until the pilot is approved, incremental *procedural* ship detailing remains a live alternative — nothing in this document blocks it.
+`visual-improvement-plan.md` remains the master status doc; this pipeline is referenced from its ship-detailing track. The agreed sequence (Tier 4 UI theme → pilot) played out: Tier 4 shipped 2026-08-14 and the galleon pilot started 2026-08-15. Active pilot work is tracked in `galleon-sails-rigging-plan.md`; incremental *procedural* detailing remains live for the other ship classes, which stay procedural until the fleet scale-out decision.

@@ -29,10 +29,12 @@ Small code-level details do not need ADRs. Put those in code comments only when 
 | [0007](decisions/0007-fire-severity-and-magazine-explosions.md) | Fire Severity and Magazine Explosions | Accepted | Model fire as severity levels and add rare magazine explosions for hits and burning ships. |
 | [0008](decisions/0008-sail-crew-and-morale-damage-foundations.md) | Sail, Crew, and Morale Damage Foundations | Accepted | Track non-hull damage pools now so Milestone 2 can attach movement, reload, and surrender consequences later. |
 | [0009](decisions/0009-shared-ship-combat-component.md) | Shared Ship Combat Component | Accepted | Move ship damage/status state into a shared component so player and enemy ships use the same combat consequences. |
+| [0010](decisions/0010-galleon-model-carried-sails-and-mesh-visuals.md) | Galleon Model-Carried Sails and Mesh-Mode Ship Visuals | Accepted | Model sails into the galleon GLB (superseding the pipeline's procedural-sail hybrid rule), keep flags procedural via anchor empties, and integrate through a `mode: mesh` ShipVisualBuilder profile. |
 
 ## Related Notes
 
 - Design brief: [Pirate Game Design Principles and Expansion Brief](design/pirate-game-design-principles-and-expansion-brief.md)
+- Galleon asset plan: [Galleon Sails, Rigging & Godot Integration Plan](design/galleon-sails-rigging-plan.md)
 - Testing guide: [Prototype Testing Guide](testing.md)
 - Playtest notes: [Playtest 0001: Milestone 0 Sailing Feel](playtests/0001-milestone-0-sailing-feel.md)
 - Playtest notes: [Playtest 0002: Milestone 1 Cannon Readability](playtests/0002-milestone-1-cannon-readability.md)

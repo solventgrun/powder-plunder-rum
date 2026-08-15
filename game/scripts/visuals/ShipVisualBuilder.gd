@@ -22,6 +22,7 @@ const SAIL_PALETTES := {
 }
 
 var generated_root: Node3D
+var model_visual: Node3D
 var sail_nodes: Array[Node3D] = []
 var flag_nodes: Array[Node3D] = []
 var flag_billboard_nodes: Array[Node3D] = []
@@ -69,11 +70,19 @@ func apply_visuals(ship_record: Dictionary, stats: Resource) -> void:
 	var flag: Dictionary = flags.get(str(faction.get("flag", "jolly_roger")), flags.get("jolly_roger", {}))
 	var sail_color := _sail_color(str(faction.get("sail_palette", "naval_canvas")), str(ship_record.get("visual_variant", "")))
 
-	_apply_hull(current_profile.get("hull", {}), faction_id)
-	_build_masts(current_profile.get("masts", {}))
-	_build_sails(current_profile.get("sails", {}), sail_color)
-	_build_flags(current_profile.get("flags", {}), flag)
-	_cache_visual_state_sockets(current_profile.get("visual_states", {}))
+	var hull_config: Dictionary = current_profile.get("hull", {})
+	if str(hull_config.get("mode", "procedural")) == "mesh" and _apply_mesh_visual(hull_config, sail_color):
+		# Model-carried hull/masts/sails/rigging (ADR 0010); flags stay
+		# procedural, attached at the model's Anchor_Flag_* empties.
+		_build_flags(current_profile.get("flags", {}), flag, _flag_anchor_positions())
+		_cache_visual_state_sockets(current_profile.get("visual_states", {}))
+		_override_fire_sockets_from_anchors()
+	else:
+		_apply_hull(hull_config, faction_id)
+		_build_masts(current_profile.get("masts", {}))
+		_build_sails(current_profile.get("sails", {}), sail_color)
+		_build_flags(current_profile.get("flags", {}), flag)
+		_cache_visual_state_sockets(current_profile.get("visual_states", {}))
 	set_damage_fraction(1.0)
 
 
@@ -122,9 +131,106 @@ func _clear_generated() -> void:
 	flag_billboard_nodes.clear()
 	fire_socket_positions.clear()
 	damage_overlay = null
+	model_visual = null
 	if generated_root:
 		generated_root.queue_free()
 		generated_root = null
+	# Mesh mode hides the scene's primitive placeholders; restore them so a
+	# rebuild into procedural mode starts from the normal state.
+	for placeholder_name in ["Hull", "Bow", "Mast"]:
+		var placeholder := get_parent().get_node_or_null(placeholder_name) as Node3D
+		if placeholder:
+			placeholder.visible = true
+
+
+func _apply_mesh_visual(hull: Dictionary, sail_color: Color) -> bool:
+	var scene_path := str(hull.get("scene", ""))
+	if scene_path.is_empty():
+		return false
+	var packed := load(scene_path) as PackedScene
+	if packed == null:
+		push_warning("ShipVisualBuilder: mesh visual scene not found: %s" % scene_path)
+		return false
+	model_visual = packed.instantiate() as Node3D
+	model_visual.name = "ModelVisual"
+	generated_root.add_child(model_visual)
+
+	for placeholder_name in ["Hull", "Bow", "Mast"]:
+		var placeholder := get_parent().get_node_or_null(placeholder_name) as Node3D
+		if placeholder:
+			placeholder.visible = false
+			# The scene-file placeholder transforms (e.g. the Bow prism's 45°)
+			# are procedural-path staging; neutralize them like _apply_hull does.
+			placeholder.rotation_degrees = Vector3.ZERO
+
+	# Model sails (Sail_* meshes) join sail_nodes so faction tint, mast break,
+	# and trim keep working; the neutral canvas material takes the tint.
+	var sail_material := _standard_material(sail_color, 0.9)
+	for sail in _find_mesh_children(model_visual, "Sail_"):
+		sail.material_override = sail_material
+		sail_nodes.append(sail)
+
+	_add_damage_overlay(
+		float(hull.get("width", 1.45)),
+		float(hull.get("height", 0.55)),
+		float(hull.get("length", 3.25))
+	)
+	return true
+
+
+func _find_mesh_children(root: Node, prefix: String) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	if root is MeshInstance3D and root.name.begins_with(prefix):
+		found.append(root)
+	for child in root.get_children():
+		found.append_array(_find_mesh_children(child, prefix))
+	return found
+
+
+func _find_node_named(root: Node, target_name: String) -> Node3D:
+	if root.name == target_name and root is Node3D:
+		return root
+	for child in root.get_children():
+		var found := _find_node_named(child, target_name)
+		if found:
+			return found
+	return null
+
+
+# Position of a node inside the model, accumulated without needing the ship to
+# be in the scene tree yet; the model instance sits at the builder's origin, so
+# this equals the builder-local position the flag/fire systems expect.
+func _position_in_model(node: Node3D) -> Vector3:
+	var accumulated := Transform3D.IDENTITY
+	var current: Node = node
+	while current != null and current != model_visual:
+		if current is Node3D:
+			accumulated = (current as Node3D).transform * accumulated
+		current = current.get_parent()
+	return accumulated.origin
+
+
+func _flag_anchor_positions() -> Dictionary:
+	var anchors := {}
+	if model_visual == null:
+		return anchors
+	var stern := _find_node_named(model_visual, "Anchor_Flag_Stern")
+	if stern:
+		anchors["stern"] = _position_in_model(stern)
+	var main := _find_node_named(model_visual, "Anchor_Flag_Main")
+	if main:
+		anchors["main"] = _position_in_model(main)
+	return anchors
+
+
+func _override_fire_sockets_from_anchors() -> void:
+	if model_visual == null:
+		return
+	var mapping := {"deck_fire_main": "Anchor_Fire_Deck", "sail_fire_main": "Anchor_Fire_Sail"}
+	for socket_id in mapping:
+		var anchor := _find_node_named(model_visual, mapping[socket_id])
+		if anchor:
+			fire_socket_positions[socket_id] = _position_in_model(anchor)
 
 
 func _apply_hull(hull: Dictionary, faction_id: String) -> void:
@@ -160,6 +266,10 @@ func _apply_hull(hull: Dictionary, faction_id: String) -> void:
 		stern.material_override = _standard_material(hull_color.darkened(0.08), 0.76)
 		generated_root.add_child(stern)
 
+	_add_damage_overlay(width, height, length)
+
+
+func _add_damage_overlay(width: float, height: float, length: float) -> void:
 	damage_overlay = MeshInstance3D.new()
 	damage_overlay.name = "DamageOverlay"
 	var damage_mesh := BoxMesh.new()
@@ -211,7 +321,7 @@ func _build_sails(sails: Dictionary, sail_color: Color) -> void:
 		sail_nodes.append(mesh_instance)
 
 
-func _build_flags(flags: Dictionary, flag: Dictionary) -> void:
+func _build_flags(flags: Dictionary, flag: Dictionary, anchors: Dictionary = {}) -> void:
 	var flag_ids := flags.keys()
 	flag_ids.sort()
 	for flag_id in flag_ids:
@@ -223,9 +333,17 @@ func _build_flags(flags: Dictionary, flag: Dictionary) -> void:
 		var minimum_size := Vector2(1.55, 0.9) if pattern == "skull" else Vector2(1.2, 0.68)
 		flag_size = Vector2(maxf(flag_size.x * 1.9, minimum_size.x), maxf(flag_size.y * 1.9, minimum_size.y))
 		mesh_instance.mesh = _make_flag_mesh(flag_size)
-		var flag_position := _parse_vec3(str(flag_config.get("position", "[0.0, 1.4, 1.4]")))
-		flag_position.x += 0.82
-		flag_position.y += 0.42
+		# Mesh-mode ships provide Anchor_Flag_* positions from the model; the
+		# hand-tuned profile offsets only apply to the procedural ships.
+		var anchor_key := "stern" if "stern" in str(flag_id) else "main"
+		var flag_position: Vector3
+		if anchors.has(anchor_key):
+			flag_position = anchors[anchor_key]
+			flag_position.y += flag_size.y * 0.5
+		else:
+			flag_position = _parse_vec3(str(flag_config.get("position", "[0.0, 1.4, 1.4]")))
+			flag_position.x += 0.82
+			flag_position.y += 0.42
 		mesh_instance.position = flag_position
 		mesh_instance.rotation_degrees = Vector3(0.0, -35.0, -4.0)
 		mesh_instance.material_override = _make_flag_material(flag)

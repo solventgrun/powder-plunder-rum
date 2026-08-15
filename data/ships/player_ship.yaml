@@ -1,5 +1,5 @@
 player_ship:
-  ship_type: frigate
+  ship_type: galleon
   faction: pirates
   visual_variant: worn
   sail_set: full

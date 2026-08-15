@@ -147,7 +147,8 @@ ship_visual_profiles:
     name: Galleon Basic
     scale: 1.65
     hull:
-      mode: procedural
+      mode: mesh
+      scene: res://game/scenes/GalleonVisual.tscn
       length: 4.35
       width: 1.72
       height: 0.76
