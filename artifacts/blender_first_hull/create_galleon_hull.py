@@ -271,6 +271,22 @@ def add_cylinder_between(name, start, end, radius, material, vertices=16):
     return obj
 
 
+def add_spar(name, start, end, radius_base, radius_tip, material, vertices=14):
+    # Tapered spar (mast, topmast, lateen yard): a cone frustum between two points.
+    start = Vector(start)
+    end = Vector(end)
+    mid = (start + end) * 0.5
+    length = (end - start).length
+    bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius_base, radius2=radius_tip, depth=length, location=mid)
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = (end - start).to_track_quat("Z", "Y").to_euler()
+    if material:
+        obj.data.materials.append(material)
+    obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
+    return obj
+
+
 def add_polyline(name, points, radius, material):
     curve = bpy.data.curves.new(name, "CURVE")
     curve.dimensions = "3D"
@@ -597,20 +613,271 @@ def add_sterncastle_anchor(materials):
     add_cube("Sterncastle_counter_shadow_tuck", (0, 0.89, 2.48), (1.02, 0.040, 0.30), black, 0.010)
 
 
-def add_mast_stub(name, z, height, radius, materials):
+def add_mast_assembly(name, z, total_height, base_radius, materials, square_yards=(), lateen=False):
+    # Full mast: tapered lower mast rising from the deck partner, a round top
+    # platform, an overlapping tapered topmast with a gold doubling band, and a
+    # gold masthead finial. Square-rig masts get course/topsail yards across x;
+    # the mizzen gets a raked lateen yard instead. Heights are fractions of
+    # total_height above the deck so all three masts share proportions.
     dark = materials["dark_wood"]
     gold = materials["gold"]
     black = materials["black"]
     _, deck_y, _ = side_point(z, 1, 0.985, -0.020)
     base_y = deck_y - 0.075
-    top_y = deck_y + height
-    add_cylinder_between(f"MastBase_{name}", (0, base_y, z), (0, top_y, z), radius, dark, 18)
-    add_cube(f"MastPartner_dark_socket_{name}", (0, deck_y + 0.015, z), (radius * 3.4, 0.060, radius * 3.4), dark, 0.014)
-    add_cube(f"MastPartner_shadow_recess_{name}", (0, deck_y + 0.052, z), (radius * 2.45, 0.020, radius * 2.45), black, 0.008)
-    add_cylinder_between(f"MastPartner_gold_front_band_{name}", (-radius * 1.9, deck_y + 0.066, z - radius * 1.9), (radius * 1.9, deck_y + 0.066, z - radius * 1.9), 0.010, gold, 8)
-    add_cylinder_between(f"MastPartner_gold_back_band_{name}", (-radius * 1.9, deck_y + 0.066, z + radius * 1.9), (radius * 1.9, deck_y + 0.066, z + radius * 1.9), 0.010, gold, 8)
-    band_y = deck_y + min(0.32, height * 0.34)
-    add_cylinder_between(f"gold_mast_band_{name}", (-radius * 1.42, band_y, z), (radius * 1.42, band_y, z), 0.014, gold, 10)
+    top_y = deck_y + total_height
+    lower_top = deck_y + total_height * 0.60
+
+    # Deck partner hardware (classified under Deck: it stays when a mast hides).
+    add_cube(f"MastPartner_dark_socket_{name}", (0, deck_y + 0.015, z), (base_radius * 3.4, 0.060, base_radius * 3.4), dark, 0.014)
+    add_cube(f"MastPartner_shadow_recess_{name}", (0, deck_y + 0.052, z), (base_radius * 2.45, 0.020, base_radius * 2.45), black, 0.008)
+    add_cylinder_between(f"MastPartner_gold_front_band_{name}", (-base_radius * 1.9, deck_y + 0.066, z - base_radius * 1.9), (base_radius * 1.9, deck_y + 0.066, z - base_radius * 1.9), 0.010, gold, 8)
+    add_cylinder_between(f"MastPartner_gold_back_band_{name}", (-base_radius * 1.9, deck_y + 0.066, z + base_radius * 1.9), (base_radius * 1.9, deck_y + 0.066, z + base_radius * 1.9), 0.010, gold, 8)
+
+    add_spar(f"Mast_lower_{name}", (0, base_y, z), (0, lower_top, z), base_radius, base_radius * 0.62, dark, 18)
+    band_y = deck_y + min(0.32, total_height * 0.34)
+    add_cylinder_between(f"gold_mast_band_{name}", (0, band_y - 0.016, z), (0, band_y + 0.016, z), base_radius * 1.06, gold, 14)
+
+    platform_r = base_radius * 1.85
+    add_cylinder_between(f"Mast_top_platform_{name}", (0, lower_top - 0.062, z), (0, lower_top - 0.022, z), platform_r, dark, 18)
+    add_cylinder_between(f"Mast_top_platform_gold_rim_{name}", (0, lower_top - 0.070, z), (0, lower_top - 0.058, z), platform_r * 1.03, gold, 18)
+
+    topmast_base = lower_top - total_height * 0.08
+    add_spar(f"Mast_topmast_{name}", (0, topmast_base, z), (0, top_y, z), base_radius * 0.55, base_radius * 0.30, dark, 14)
+    add_cylinder_between(f"Mast_doubling_gold_band_{name}", (0, lower_top - 0.115, z), (0, lower_top - 0.085, z), base_radius * 0.80, gold, 14)
+    add_ellipsoid(f"Mast_head_gold_finial_{name}", (0, top_y + 0.035, z), (0.030, 0.040, 0.030), gold, 10, 6)
+
+    def mast_radius_at(y):
+        # Piecewise linear taper matching the two spar segments above.
+        if y <= lower_top:
+            f = (y - base_y) / (lower_top - base_y)
+            return base_radius * (1.0 - 0.38 * f)
+        f = (y - topmast_base) / (top_y - topmast_base)
+        return base_radius * (0.55 - 0.25 * f)
+
+    for suffix, height_fraction, span, radius in square_yards:
+        y = deck_y + total_height * height_fraction
+        add_cylinder_between(f"Yard_{suffix}_{name}", (-span * 0.5, y, z), (span * 0.5, y, z), radius, dark, 12)
+        sling_radius = max(radius * 1.55, mast_radius_at(y) * 1.22)
+        add_cylinder_between(f"Yard_{suffix}_gold_sling_{name}", (0, y - 0.030, z), (0, y + 0.030, z), sling_radius, gold, 10)
+
+    if lateen:
+        # Raked lateen yard: forward-low to aft-high, crossing the mast a bit
+        # above half height; the high end overhangs the sterncastle as on the
+        # concept sheet.
+        cross_y = deck_y + total_height * 0.55
+        half = 1.02
+        dy = 0.67 * half
+        dz = 0.74 * half
+        add_spar(f"Yard_lateen_{name}", (0, cross_y - dy, z - dz), (0, cross_y + dy, z + dz), 0.027, 0.017, dark, 12)
+        add_cylinder_between(f"Yard_lateen_gold_sling_{name}", (0, cross_y - 0.030, z), (0, cross_y + 0.030, z), base_radius * 0.72, gold, 10)
+
+
+def add_sail(name, point_fn, material, nx=13, ny=11):
+    # Deformable sail sheet: an even nx x ny quad grid (future wind/damage
+    # deformation needs this topology), smooth-shaded, with a thin solidify so
+    # both faces light correctly in Cycles and in Godot after export.
+    verts = []
+    faces = []
+    for r in range(ny + 1):
+        v = r / ny
+        for c in range(nx + 1):
+            u = c / nx
+            verts.append(point_fn(u, v))
+    for r in range(ny):
+        for c in range(nx):
+            a = r * (nx + 1) + c
+            faces.append((a, a + 1, a + nx + 2, a + nx + 1))
+    mesh = bpy.data.meshes.new(f"{name}Mesh")
+    mesh.from_pydata(verts, [], faces)
+    recalc_outward_normals(mesh)
+    mesh.update()
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.data.materials.append(material)
+    solid = obj.modifiers.new("canvas thickness", "SOLIDIFY")
+    solid.thickness = 0.014
+    solid.offset = 0.0
+    return obj
+
+
+def add_flags_and_anchors(materials):
+    # Streamers fly aft off the mastheads like the concept sheet's banners.
+    # The faction flag itself stays procedural in Godot (ADR 0010) — the model
+    # only ships anchor empties for the runtime flag and fire-effect systems.
+    streamer = materials["streamer"]
+
+    def add_streamer(name, root, length, height):
+        root_v = Vector(root)
+
+        def fn(u, v):
+            z = root_v.z + u * length
+            y = root_v.y - u * length * 0.16 + 0.055 * math.sin(math.pi * 2.1 * u) * u + (v - 0.5) * height * (1.0 - 0.55 * u)
+            x = root_v.x + 0.05 * math.sin(math.pi * 2.6 * u + 0.8) * u
+            return (x, y, z)
+
+        add_sail(name, fn, streamer, nx=16, ny=2)
+
+    add_streamer("Streamer_fore", (0, 3.44, -1.05), 0.46, 0.070)
+    add_streamer("Streamer_main", (0, 3.91, -0.02), 0.60, 0.080)
+    add_streamer("Streamer_mizzen", (0, 3.35, 1.08), 0.40, 0.062)
+
+    def anchor(name, loc):
+        empty = bpy.data.objects.new(name, None)
+        empty.empty_display_size = 0.06
+        empty.location = loc
+        bpy.context.collection.objects.link(empty)
+
+    # Flag anchors: ensign on the ornamental stern mast, pennant at the main
+    # masthead. Fire anchors keep the gameplay-tuned visual_states positions
+    # from ship_visual_profiles.yaml (deck_fire_main / sail_fire_main).
+    anchor("Anchor_Flag_Stern", (0.0, 3.34, 2.54))
+    anchor("Anchor_Flag_Main", (0.0, 3.96, -0.05))
+    anchor("Anchor_Fire_Deck", (0.0, 1.05, 0.12))
+    anchor("Anchor_Fire_Sail", (0.0, 2.35, -0.05))
+
+
+def rope_points(start, end, drop=0.03, samples=5):
+    # Straight run with a light parabolic sag so lines read as rope, not wire.
+    start = Vector(start)
+    end = Vector(end)
+    pts = []
+    for i in range(samples):
+        t = i / (samples - 1)
+        p = start.lerp(end, t)
+        p.y -= drop * math.sin(math.pi * t)
+        pts.append(tuple(p))
+    return pts
+
+
+def add_rope_bundle(name, ropes, radius, material):
+    # One curve object holding every rope of a rigging group as its own POLY
+    # spline — the group exports as a single mesh with no per-rope objects.
+    curve = bpy.data.curves.new(f"{name}Curve", "CURVE")
+    curve.dimensions = "3D"
+    curve.resolution_u = 2
+    curve.bevel_depth = radius
+    curve.bevel_resolution = 2
+    for pts in ropes:
+        spline = curve.splines.new("POLY")
+        spline.points.add(len(pts) - 1)
+        for point, co in zip(spline.points, pts):
+            point.co = (co[0], co[1], co[2], 1.0)
+    obj = bpy.data.objects.new(name, curve)
+    bpy.context.collection.objects.link(obj)
+    curve.materials.append(material)
+    return obj
+
+
+def add_rigging(materials):
+    # Stylized standing rigging: major stays, backstays, shrouds, yard lifts,
+    # and bowsprit gear only — silhouette support, not rope simulation. Routes
+    # are chosen to clear the filled sails (the main stay ends at the fore
+    # masthead instead of the bow so it cannot pierce the fore course; the
+    # bobstay starts mid-bowsprit, aft of the spritsail canvas).
+    rope = materials["rope"]
+
+    def bulwark_anchor(z, side):
+        x, y, _ = side_point(z, side, 1.0, 0.05)
+        return (x, y + 0.12, z)
+
+    fore = []
+    fore.append(rope_points((0, 3.39, -1.08), (0, 1.98, -3.18), 0.05))       # fore topmast stay -> bowsprit
+    fore.append(rope_points((0, 2.27, -1.08), (0, 1.31, -2.52), 0.04))       # fore stay -> stem head
+    for side in (-1, 1):
+        fore.append(rope_points((0, 3.39, -1.08), bulwark_anchor(-0.45, side), 0.03))   # backstay
+        for z in (-1.40, -1.08, -0.76):
+            fore.append(rope_points((0, 2.27, -1.08), bulwark_anchor(z, side), 0.012))  # shrouds
+        fore.append(rope_points((0, 2.30, -1.08), (side * 0.775, 2.019, -1.08), 0.015)) # course yard lift
+    add_rope_bundle("Rigging_fore", fore, 0.010, rope)
+
+    main = []
+    main.append(rope_points((0, 2.54, -0.05), (0, 2.24, -1.02), 0.05))       # main stay -> fore masthead
+    main.append(rope_points((0, 3.86, -0.05), (0, 2.32, -1.08), 0.05))       # main topmast stay -> fore top
+    for side in (-1, 1):
+        main.append(rope_points((0, 3.86, -0.05), bulwark_anchor(0.65, side), 0.03))    # backstay
+        for z in (-0.40, -0.05, 0.30):
+            main.append(rope_points((0, 2.54, -0.05), bulwark_anchor(z, side), 0.012))  # shrouds
+        main.append(rope_points((0, 2.57, -0.05), (side * 1.025, 2.224, -0.05), 0.015)) # course yard lift
+    add_rope_bundle("Rigging_main", main, 0.010, rope)
+
+    mizzen = []
+    mizzen.append(rope_points((0, 3.30, 1.05), (0, 1.15, 0.10), 0.05))       # mizzen stay -> main deck partner
+    mizzen.append(rope_points((0, 3.30, 1.05), (0, 2.84, 2.50), 0.03))       # stern stay -> sterncastle roof
+    for side in (-1, 1):
+        # Shrouds land forward of the stern staircase foot (its treads climb
+        # z 0.74-1.86 beside the quarterdeck; a bulwark anchor aft of that
+        # runs the rope straight through the treads and handrails).
+        mizzen.append(rope_points((0, 2.24, 1.05), bulwark_anchor(0.66, side), 0.012))
+        # Aft support becomes a backstay landing on the balcony corner
+        # stanchion top — well above the staircase.
+        mizzen.append(rope_points((0, 2.24, 1.05), (side * 0.70, 1.96, 2.13), 0.03))
+    mizzen.append(rope_points((0, 3.28, 1.05), (0, 2.86, 1.78), 0.02))       # lateen peak lift
+    mizzen.append(rope_points((0, 1.63, 0.40), (0, 0.92, 0.34), 0.02))       # lateen tack downhaul
+    mizzen.append(rope_points((0, 1.74, 1.68), (0.32, 1.94, 2.16), 0.03))    # lateen sheet -> balcony rail
+    add_rope_bundle("Rigging_mizzen", mizzen, 0.010, rope)
+
+    bowsprit = []
+    bowsprit.append(rope_points((0, 1.63, -2.90), (0, 0.20, -2.35), 0.03))   # bobstay, aft of the spritsail
+    for side in (-1, 1):
+        bowsprit.append(rope_points((side * 0.475, 1.84, -3.06), (side * 0.48, 0.60, -2.05), 0.03))  # sprit yard guy
+        bowsprit.append(rope_points((0, 2.12, -3.36), (side * 0.475, 1.85, -3.06), 0.015))           # sprit yard lift
+    add_rope_bundle("Rigging_bowsprit", bowsprit, 0.009, rope)
+
+
+def add_sails(materials):
+    # Healthy sail set, moderately filled with wind (baked shape — runtime
+    # deformation is out of scope for the alpha, topology supports it later).
+    # Square sails billow bow-ward (-Z, the runtime wind convention); the
+    # mizzen lateen billows to starboard, perpendicular to its fore-aft plane.
+    canvas = materials["sail"]
+
+    def square_sail(name, z_mast, yard_y, foot_y, width_head, width_foot, depth, foot_arc):
+        # Head hangs just below its yard, sheet just forward of the mast. The
+        # billow peaks around 70% down the sail (foot keeps ~77% of it, head is
+        # bent flat to the yard), and the foot edge arcs up between the clews.
+        z_plane = z_mast - 0.045
+        head_y = yard_y - 0.015
+
+        def fn(u, v):
+            width = width_head + (width_foot - width_head) * v
+            x = (u - 0.5) * width
+            y = head_y + (foot_y - head_y) * v + foot_arc * math.sin(math.pi * u) * (v ** 2)
+            billow = depth * math.sin(math.pi * u) * math.sin(math.pi * v * 0.72)
+            return (x, y, z_plane - billow)
+
+        add_sail(name, fn, canvas)
+
+    fore_deck = side_point(-1.08, 1, 0.985, -0.020)[1]
+    main_deck = side_point(-0.05, 1, 0.985, -0.020)[1]
+    mizzen_deck = side_point(1.05, 1, 0.985, -0.020)[1]
+
+    square_sail("Sail_course_fore", -1.08, fore_deck + 2.70 * 0.47, 1.28, 1.44, 1.44, 0.34, 0.14)
+    square_sail("Sail_topsail_fore", -1.08, fore_deck + 2.70 * 0.90, fore_deck + 2.70 * 0.62, 0.88, 1.07, 0.26, 0.10)
+    square_sail("Sail_course_main", -0.05, main_deck + 3.20 * 0.47, 1.38, 1.92, 1.92, 0.40, 0.15)
+    square_sail("Sail_topsail_main", -0.05, main_deck + 3.20 * 0.90, main_deck + 3.20 * 0.62, 1.15, 1.40, 0.30, 0.11)
+    square_sail("Sail_sprit_bowsprit", -3.045, 1.84, 1.34, 0.82, 0.86, 0.15, 0.07)
+
+    # Lateen: a triangular sheet whose head lies along the raked yard, leech
+    # dropping from the peak to a clew held forward of the sterncastle front.
+    mizzen_cross = mizzen_deck + 2.55 * 0.55
+    yard_low = Vector((0.0, mizzen_cross - 0.68, 1.05 - 0.755))
+    yard_high = Vector((0.0, mizzen_cross + 0.68, 1.05 + 0.755))
+    tack = yard_low.lerp(yard_high, 0.06)
+    peak = yard_low.lerp(yard_high, 0.95)
+    clew = Vector((0.0, 1.72, 1.70))
+    foot_start = tack.lerp(clew, 0.04)
+
+    def lateen_fn(u, v):
+        head = tack.lerp(peak, u)
+        foot = foot_start.lerp(clew, u)
+        base = head.lerp(foot, v)
+        billow = 0.20 * math.sin(math.pi * u) * math.sin(math.pi * v * 0.72)
+        arc = 0.07 * math.sin(math.pi * u) * (v ** 2)
+        return (base.x + billow, base.y + arc, base.z)
+
+    add_sail("Sail_lateen_mizzen", lateen_fn, canvas)
 
 
 def station_profile():
@@ -925,12 +1192,24 @@ def decorate_hull(materials):
             10,
         )
 
-    for name, z, height, radius in [("fore", -1.08, 1.0, 0.07), ("main", -0.05, 1.28, 0.085), ("mizzen", 1.05, 0.9, 0.06)]:
-        add_mast_stub(name, z, height, radius, materials)
+    # Full mast assemblies (heights match the galleon_basic visual profile so
+    # the exported model stays drop-in for the existing gameplay slot).
+    add_mast_assembly(
+        "fore", -1.08, 2.70, 0.070, materials,
+        square_yards=[("lower", 0.47, 1.55, 0.030), ("upper", 0.90, 1.18, 0.024)],
+    )
+    add_mast_assembly(
+        "main", -0.05, 3.20, 0.085, materials,
+        square_yards=[("lower", 0.47, 2.05, 0.034), ("upper", 0.90, 1.50, 0.027)],
+    )
+    add_mast_assembly("mizzen", 1.05, 2.55, 0.060, materials, lateen=True)
 
     # Bowsprit, beakhead structure, and simple figurehead silhouette.
     add_cylinder_between("Bowsprit_dark_wood", (0, 1.28, -2.46), (0, 2.06, -3.30), 0.055, dark, 16)
     add_cylinder_between("Bowsprit_gold_tip", (0, 2.06, -3.30), (0, 2.18, -3.48), 0.04, gold, 16)
+    # Sprit yard for the D3 spritsail, hung under the outer bowsprit.
+    add_cylinder_between("Bowsprit_sprit_yard", (-0.475, 1.84, -3.06), (0.475, 1.84, -3.06), 0.022, dark, 12)
+    add_cylinder_between("Bowsprit_sprit_yard_gold_collar", (0, 1.822, -3.041), (0, 1.858, -3.079), 0.062, gold, 12)
     add_polyline("Bow_swept_gold_stem", [(0, -0.05, -2.20), (0, 0.36, -2.42), (0, 0.86, -2.62), (0, 1.24, -2.76)], 0.030, gold)
     add_polyline("Bow_upper_gold_scroll_rail", [(0.0, 1.04, -2.26), (0.0, 1.15, -2.46), (0.0, 1.22, -2.66)], 0.012, gold)
     for side in (-1, 1):
@@ -993,6 +1272,115 @@ def decorate_hull(materials):
         for z in [1.53, 1.07, 0.61, 0.15, -0.31, -0.77, -1.23]:
             frame = hull_surface_frame(z, side, 0.66)
             add_surface_cube(f"painted_hull_panel_divider_{side}_{z}", frame, (0.012, 0.0, 0.0), (0.030, 0.30, 0.028), gold, 0.006)
+
+
+MAST_ASSEMBLIES = {"fore": "ForemastAssembly", "main": "MainmastAssembly", "mizzen": "MizzenAssembly", "bowsprit": "BowspritAssembly"}
+
+# Godot-facing assembly tree (contract in docs/design/galleon-sails-rigging-plan.md).
+# Hull children are the D6 join targets; empty groups today, one mesh each after
+# the join pass. Assembly empties are the future per-mast hide/damage handles.
+ASSEMBLY_TREE = {
+    "Hull": ["HullMesh", "Deck", "Sterncastle", "Railings", "Gunports", "Cannons"],
+    "ForemastAssembly": [],
+    "MainmastAssembly": [],
+    "MizzenAssembly": [],
+    "BowspritAssembly": [],
+    "Flags": [],
+    "EffectsAnchors": [],
+}
+
+
+def classify_ship_object(name):
+    n = name.lower()
+    if n.startswith(("mast_", "yard_", "sail_", "rigging_", "gold_mast_band_")):
+        for key, assembly in MAST_ASSEMBLIES.items():
+            if n.endswith("_" + key):
+                return assembly
+    if n.startswith(("streamer_", "anchor_flag")):
+        return "Flags"
+    if n.startswith("anchor_fire"):
+        return "EffectsAnchors"
+    if n.startswith("mastpartner_"):
+        # Deck socket hardware stays visible when a mast assembly is hidden.
+        return "Deck"
+    if n.startswith("bowsprit_"):
+        return "BowspritAssembly"
+    if "gundeck_port" in n:
+        return "Gunports"
+    if "deck_cannon" in n:
+        return "Cannons"
+    if n.startswith("sterncastle_rail_corner_stanchion"):
+        # Part of the bulwark fall barrier, not the castle mass.
+        return "Railings"
+    if n.startswith(("sterncastle", "stern_", "balcony_")):
+        return "Sterncastle"
+    if n.startswith(("rail_post", "top_rail_", "mid_rail_")):
+        return "Railings"
+    if n.startswith(("bow_deck_closing_heavy_cheek_rail", "bow_front_cross_rail")):
+        return "Railings"
+    if n.startswith(("deck_", "quarterdeck_")):
+        return "Deck"
+    if n.startswith(("hull_", "wood_plank_line_", "gold_hull_sheer_", "bow_", "figurehead_", "gold_rivet_", "painted_hull_panel_divider_")):
+        return "HullMesh"
+    return None
+
+
+def organize_assemblies():
+    # Runs right after decorate_hull, while every scene object is ship geometry
+    # (lights/camera/origin marker are added afterwards and stay unparented).
+    # Parents preserve world transforms, so this pass must not move a vertex.
+    ship_objects = list(bpy.context.scene.objects)
+
+    def add_empty(name, location=(0.0, 0.0, 0.0), parent=None):
+        empty = bpy.data.objects.new(name, None)
+        empty.empty_display_size = 0.1
+        empty.location = location
+        bpy.context.collection.objects.link(empty)
+        if parent is not None:
+            empty.parent = parent
+        return empty
+
+    def mast_deck_point(z):
+        _, deck_y, _ = side_point(z, 1, 0.985, -0.020)
+        return (0.0, deck_y, z)
+
+    # Useful pivots: mast assemblies at their deck partner, bowsprit at its root.
+    assembly_locations = {
+        "ForemastAssembly": mast_deck_point(-1.08),
+        "MainmastAssembly": mast_deck_point(-0.05),
+        "MizzenAssembly": mast_deck_point(1.05),
+        "BowspritAssembly": (0.0, 1.28, -2.46),
+    }
+
+    root = add_empty("Galleon")
+    groups = {}
+    for assembly, children in ASSEMBLY_TREE.items():
+        assembly_empty = add_empty(assembly, assembly_locations.get(assembly, (0.0, 0.0, 0.0)), root)
+        groups[assembly] = assembly_empty
+        for child in children:
+            groups[child] = add_empty(child, parent=assembly_empty)
+
+    bpy.context.view_layer.update()
+
+    unclassified = []
+    counts = {}
+    for obj in ship_objects:
+        group_name = classify_ship_object(obj.name)
+        if group_name is None:
+            unclassified.append(obj.name)
+            group_name = "HullMesh"
+        group = groups[group_name]
+        obj.parent = group
+        obj.matrix_parent_inverse = group.matrix_world.inverted()
+        counts[group_name] = counts.get(group_name, 0) + 1
+
+    print("assembly organization:")
+    for group_name in sorted(counts):
+        print(f"  {group_name}: {counts[group_name]} objects")
+    if unclassified:
+        print(f"  WARNING {len(unclassified)} unclassified (defaulted to HullMesh):")
+        for name in unclassified:
+            print(f"    {name}")
 
 
 def add_lighting_and_camera():
@@ -1260,6 +1648,67 @@ curved bow, gun ports, and a strong side silhouette.
   ornate assemblies: a paneled double balcony door with gold architrave,
   entablature, and handles, flanked windows with mullions, deep glass, and
   pediment crowns, plus a matching cabin door and windows at deck level
+
+2026-08-15 assembly organization pass (plan deliverable D1):
+
+- added organize_assemblies(): every generated object is parented (world
+  transforms preserved) into the Godot-facing assembly tree from
+  docs/design/galleon-sails-rigging-plan.md — Galleon root, Hull with
+  HullMesh/Deck/Sterncastle/Railings/Gunports/Cannons join-target groups,
+  Fore/Main/Mizzen mast assemblies (empties pivoted at their deck partners),
+  BowspritAssembly, plus empty Flags and EffectsAnchors groups for D5
+- classification is by name prefix; mast partner deck hardware deliberately
+  stays under Deck so hiding a mast assembly leaves a plausible socket
+- verified no visual change: post-pass renders match the pre-pass baseline
+
+2026-08-15 masts and yards pass (plan deliverable D2):
+
+- replaced the three mast stubs with full assemblies: tapered lower masts
+  (new add_spar cone-frustum helper), round top platforms with gold rims,
+  overlapping tapered topmasts with gold doubling bands, and gold masthead
+  finials; heights match the galleon_basic profile (fore 2.70, main 3.20,
+  mizzen 2.55 above deck) so the export stays drop-in for the gameplay slot
+- course and topsail yards with gold slings on fore and main (sling radius
+  derived from the local mast taper so it always encircles the mast), raked
+  lateen yard on the mizzen overhanging the sterncastle, and a sprit yard
+  with gold collar under the outer bowsprit
+- the old gold mast band became a proper encircling ring instead of a bar
+
+2026-08-15 healthy sails pass (plan deliverable D3):
+
+- six deformable sail sheets (13x11 quad grids, smooth-shaded, thin solidify),
+  each its own named object on the shared neutral canvas material:
+  Sail_course_fore, Sail_topsail_fore, Sail_course_main, Sail_topsail_main,
+  Sail_lateen_mizzen, Sail_sprit_bowsprit
+- moderate wind fill is baked into the mesh: square sails billow bow-ward
+  with depth zero at head/clews and deepest at the mid foot, topsails taper
+  toward their heads, the lateen is a triangular sheet along the raked yard
+  billowing to starboard with its clew held forward of the sterncastle front
+- fill tuning after first render: billow peak moved to ~70% down the sail
+  (foot keeps 77%), depths increased, course feet raised for clear air, and
+  foot edges arc up between the clews so sails stop reading as flat cards
+
+2026-08-15 rigging pass (plan deliverable D4):
+
+- stylized standing rigging as four multi-spline curve objects (one per
+  group, no per-rope objects): Rigging_fore, Rigging_main, Rigging_mizzen,
+  Rigging_bowsprit — stays, backstays, three shrouds per side on fore/main,
+  two on mizzen, course yard lifts, lateen peak lift/downhaul/sheet, bobstay
+  and sprit yard guys/lifts; every rope has a light parabolic sag
+- routes chosen to clear the filled sails: the main stay lands on the fore
+  masthead instead of the bow (a bow run would pierce the fore course), the
+  bobstay starts mid-bowsprit aft of the spritsail canvas, and sprit yard
+  guys run from the yard tips outside the sail's width
+
+2026-08-15 streamers and anchors pass (plan deliverable D5):
+
+- three bright red masthead streamers (thin tapering ribbon grids with a
+  baked aft-flying S-curl, matching the concept sheet's banners) under the
+  Flags group: Streamer_fore, Streamer_main, Streamer_mizzen
+- four anchor empties for the runtime systems: Anchor_Flag_Stern (ornamental
+  stern mast) and Anchor_Flag_Main (main masthead) under Flags,
+  Anchor_Fire_Deck and Anchor_Fire_Sail under EffectsAnchors at the
+  gameplay-tuned visual_states positions from ship_visual_profiles.yaml
 """
     (OUT_DIR / "reference_notes.md").write_text(text, encoding="utf-8")
 
@@ -1271,6 +1720,10 @@ def build_materials():
         "red_paint": paint_mat("deep burgundy satin paint", (0.40, 0.040, 0.032, 1), (0.54, 0.075, 0.055, 1), (0.22, 0.018, 0.016, 1)),
         "gold": gold_mat("bright aged gold trim"),
         "black": mat("visible warm shadow black", (0.035, 0.027, 0.020, 1), 0.82),
+        # Neutral/whitish so ShipVisualBuilder's per-faction tint reads (ADR 0010).
+        "sail": mat("neutral sail canvas", (0.91, 0.88, 0.80, 1), 0.90),
+        "rope": mat("tarred hemp rope", (0.20, 0.14, 0.09, 1), 0.92),
+        "streamer": mat("bright banner red", (0.72, 0.08, 0.06, 1), 0.62),
     }
 
 
@@ -1279,6 +1732,10 @@ def main():
     materials = build_materials()
     create_hull(materials)
     decorate_hull(materials)
+    add_sails(materials)
+    add_rigging(materials)
+    add_flags_and_anchors(materials)
+    organize_assemblies()
     add_lighting_and_camera()
 
     blend_path = OUT_DIR / "first_pass_galleon_hull.blend"

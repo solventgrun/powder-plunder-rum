@@ -192,3 +192,64 @@ curved bow, gun ports, and a strong side silhouette.
   ornate assemblies: a paneled double balcony door with gold architrave,
   entablature, and handles, flanked windows with mullions, deep glass, and
   pediment crowns, plus a matching cabin door and windows at deck level
+
+2026-08-15 assembly organization pass (plan deliverable D1):
+
+- added organize_assemblies(): every generated object is parented (world
+  transforms preserved) into the Godot-facing assembly tree from
+  docs/design/galleon-sails-rigging-plan.md — Galleon root, Hull with
+  HullMesh/Deck/Sterncastle/Railings/Gunports/Cannons join-target groups,
+  Fore/Main/Mizzen mast assemblies (empties pivoted at their deck partners),
+  BowspritAssembly, plus empty Flags and EffectsAnchors groups for D5
+- classification is by name prefix; mast partner deck hardware deliberately
+  stays under Deck so hiding a mast assembly leaves a plausible socket
+- verified no visual change: post-pass renders match the pre-pass baseline
+
+2026-08-15 masts and yards pass (plan deliverable D2):
+
+- replaced the three mast stubs with full assemblies: tapered lower masts
+  (new add_spar cone-frustum helper), round top platforms with gold rims,
+  overlapping tapered topmasts with gold doubling bands, and gold masthead
+  finials; heights match the galleon_basic profile (fore 2.70, main 3.20,
+  mizzen 2.55 above deck) so the export stays drop-in for the gameplay slot
+- course and topsail yards with gold slings on fore and main (sling radius
+  derived from the local mast taper so it always encircles the mast), raked
+  lateen yard on the mizzen overhanging the sterncastle, and a sprit yard
+  with gold collar under the outer bowsprit
+- the old gold mast band became a proper encircling ring instead of a bar
+
+2026-08-15 healthy sails pass (plan deliverable D3):
+
+- six deformable sail sheets (13x11 quad grids, smooth-shaded, thin solidify),
+  each its own named object on the shared neutral canvas material:
+  Sail_course_fore, Sail_topsail_fore, Sail_course_main, Sail_topsail_main,
+  Sail_lateen_mizzen, Sail_sprit_bowsprit
+- moderate wind fill is baked into the mesh: square sails billow bow-ward
+  with depth zero at head/clews and deepest at the mid foot, topsails taper
+  toward their heads, the lateen is a triangular sheet along the raked yard
+  billowing to starboard with its clew held forward of the sterncastle front
+- fill tuning after first render: billow peak moved to ~70% down the sail
+  (foot keeps 77%), depths increased, course feet raised for clear air, and
+  foot edges arc up between the clews so sails stop reading as flat cards
+
+2026-08-15 rigging pass (plan deliverable D4):
+
+- stylized standing rigging as four multi-spline curve objects (one per
+  group, no per-rope objects): Rigging_fore, Rigging_main, Rigging_mizzen,
+  Rigging_bowsprit — stays, backstays, three shrouds per side on fore/main,
+  two on mizzen, course yard lifts, lateen peak lift/downhaul/sheet, bobstay
+  and sprit yard guys/lifts; every rope has a light parabolic sag
+- routes chosen to clear the filled sails: the main stay lands on the fore
+  masthead instead of the bow (a bow run would pierce the fore course), the
+  bobstay starts mid-bowsprit aft of the spritsail canvas, and sprit yard
+  guys run from the yard tips outside the sail's width
+
+2026-08-15 streamers and anchors pass (plan deliverable D5):
+
+- three bright red masthead streamers (thin tapering ribbon grids with a
+  baked aft-flying S-curl, matching the concept sheet's banners) under the
+  Flags group: Streamer_fore, Streamer_main, Streamer_mizzen
+- four anchor empties for the runtime systems: Anchor_Flag_Stern (ornamental
+  stern mast) and Anchor_Flag_Main (main masthead) under Flags,
+  Anchor_Fire_Deck and Anchor_Fire_Sail under EffectsAnchors at the
+  gameplay-tuned visual_states positions from ship_visual_profiles.yaml
