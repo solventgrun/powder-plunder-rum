@@ -1,11 +1,11 @@
-"""Build assets/models/galleon.glb from the generator (plan deliverable D6).
+﻿"""Build assets/models/galleon.glb from the generator (plan deliverable D6).
 
 Run headless:
   blender --background --python artifacts/blender_first_hull/build_galleon_glb.py
 
 Rebuilds the ship without lights/camera, flattens every terminal group into a
 single world-baked mesh (applying bevel/solidify modifiers and converting the
-rigging curves — a manual bmesh merge, because bpy.ops.object.join keeps only
+rigging curves - a manual bmesh merge, because bpy.ops.object.join keeps only
 the active object's modifiers), renames objects to the naming contract from
 docs/design/galleon-sails-rigging-plan.md, gives masts/yards/sails useful
 pivots, and exports a GLB with the exporter's Z-up->Y-up conversion DISABLED:
@@ -13,83 +13,21 @@ the model is authored Y-up / -Z-forward inside Blender, which already matches
 the glTF convention, so the default conversion would tip the ship on its side.
 """
 import importlib.util
+import sys
 from pathlib import Path
 
-import bmesh
 import bpy
-from mathutils import Matrix
 
 HERE = Path(__file__).resolve().parent
 GLB_PATH = HERE.parent.parent / "assets" / "models" / "galleon.glb"
 
+sys.path.insert(0, str(HERE.parent))
+
+from ship_kit import flatten_group, flatten_materials_for_export
+
 spec = importlib.util.spec_from_file_location("galleon_gen", HERE / "create_galleon_hull.py")
 gen = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gen)
-
-
-def flatten_materials_for_export():
-    # The wood/paint materials drive Base Color through procedural node graphs
-    # (noise grain) that glTF cannot represent — the exporter falls back to a
-    # WHITE base color factor, which shipped an all-white galleon into Godot.
-    # For the export build only, unlink those inputs so the flat base colors
-    # already stored on each Principled BSDF export instead (ADR 0010's
-    # flat-materials-first decision; a bake pass is the future upgrade path).
-    for material in bpy.data.materials:
-        if not material.use_nodes:
-            continue
-        tree = material.node_tree
-        bsdf = tree.nodes.get("Principled BSDF")
-        if bsdf is None:
-            continue
-        for socket_name in ("Base Color", "Normal"):
-            socket = bsdf.inputs.get(socket_name)
-            if socket is not None and socket.is_linked:
-                for link in list(socket.links):
-                    tree.links.remove(link)
-
-
-def flatten_group(objects, name, pivot, parent):
-    # Merge the group's evaluated geometry (modifiers applied, curves beveled)
-    # into one mesh whose object origin sits at the requested pivot.
-    deps = bpy.context.evaluated_depsgraph_get()
-    bm = bmesh.new()
-    materials = []
-    slot_of = {}
-    for obj in objects:
-        if obj.type not in {"MESH", "CURVE"}:
-            continue
-        evaluated = obj.evaluated_get(deps)
-        mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=True, depsgraph=deps)
-        mesh.transform(obj.matrix_world)
-        remap = []
-        for m in mesh.materials:
-            if m is None:
-                remap.append(0)
-                continue
-            if m.name not in slot_of:
-                slot_of[m.name] = len(materials)
-                materials.append(m)
-            remap.append(slot_of[m.name])
-        if remap:
-            for poly in mesh.polygons:
-                poly.material_index = remap[min(poly.material_index, len(remap) - 1)]
-        bm.from_mesh(mesh)
-        bpy.data.meshes.remove(mesh)
-    out = bpy.data.meshes.new(f"{name}Mesh")
-    bm.to_mesh(out)
-    bm.free()
-    for m in materials:
-        out.materials.append(m)
-    out.transform(Matrix.Translation((-pivot[0], -pivot[1], -pivot[2])))
-    out.update()
-    joined = bpy.data.objects.new(name, out)
-    bpy.context.collection.objects.link(joined)
-    joined.location = pivot
-    joined.parent = parent
-    joined.matrix_parent_inverse = parent.matrix_world.inverted()
-    for obj in objects:
-        bpy.data.objects.remove(obj, do_unlink=True)
-    return joined
 
 
 def main():
@@ -118,7 +56,7 @@ def main():
         flatten_group(children, sub_name, (0.0, 0.0, 0.0), hull)
 
     # Mast assemblies: partition children by prefix into contract objects.
-    # Partition FIRST (pure reads), flatten after — flatten_group deletes the
+    # Partition FIRST (pure reads), flatten after - flatten_group deletes the
     # originals, and iterating removed objects raises ReferenceError.
     def build_mast(assembly_name, key, z, deck_y, total_height, yards):
         assembly = objs[assembly_name]

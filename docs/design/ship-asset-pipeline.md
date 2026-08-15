@@ -106,7 +106,7 @@ Why this matters (unchanged from the source doc): a convention change regenerate
 
 ## File conventions
 
-**Pilot reality (2026-08-15):** the galleon's canonical source is the generator script `artifacts/blender_first_hull/create_galleon_hull.py` (the `.blend` and renders are derived output), and the build output goes to `assets/models/galleon.glb`. The spec YAML, validator, and the `assets/ships/<class>/` layout below are **deferred** until a second modeled ship needs shared machinery — until then the naming/material contract lives in `galleon-sails-rigging-plan.md`.
+**Pilot reality (2026-08-15):** the galleon's canonical source is the generator script `artifacts/blender_first_hull/create_galleon_hull.py` (the `.blend` and renders are derived output), and the build output goes to `assets/models/galleon.glb`. **The shared machinery now lives in `artifacts/ship_kit/`** (extracted post-sign-off and verified pixel-identical against the galleon): materials, primitives, `HullForm` hull math, mast assemblies, sail grids, rope rigging, assembly organization, the review render rig, and the GLB flatten/export helpers. Per-ship generators own only their station profile, decoration, sail plan, rigging routes, and anchors. **The galleon render-diff is the kit's regression gate** — any kit change requires a galleon regenerate + pixel compare. The spec YAML and validator below remain deferred; the naming/material contract lives in `galleon-sails-rigging-plan.md`. Ship #2 is briefed: `frigate-visual-brief.md`.
 
 Target layout when the pipeline generalizes:
 

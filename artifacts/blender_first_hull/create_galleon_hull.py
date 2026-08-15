@@ -1,374 +1,47 @@
+"""Galleon visual asset generator (pilot ship of the ship pipeline).
+
+Ship-agnostic machinery lives in artifacts/ship_kit; this file owns only the
+galleon: its station profile, hull decoration, sterncastle, sail plan, rigging
+routes, streamers/anchors, classification rules, and review renders.
+"""
 import math
+import sys
 from pathlib import Path
 
-import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ship_kit import (
+    HullForm,
+    add_cube,
+    add_cylinder_between,
+    add_ellipsoid,
+    add_mast_assembly,
+    add_polyline,
+    add_rope_bundle,
+    add_sail,
+    add_shaped_deck,
+    add_side_gunport,
+    add_stern_gallery_tier,
+    add_surface_cube,
+    add_tapered_box,
+    classify_common,
+    clear_scene,
+    gold_mat,
+    mat,
+    organize_assemblies_from,
+    paint_mat,
+    render_clay,
+    render_to,
+    rope_points,
+    setup_review_scene,
+    wood_mat,
+)
+from ship_kit import create_hull as kit_create_hull
 
 OUT_DIR = Path(__file__).resolve().parent
-
-
-def clear_scene():
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete()
-
-
-def mat(name, color, roughness=0.72, metallic=0.0):
-    material = bpy.data.materials.new(name)
-    material.use_nodes = True
-    bsdf = material.node_tree.nodes.get("Principled BSDF")
-    bsdf.inputs["Base Color"].default_value = color
-    bsdf.inputs["Roughness"].default_value = roughness
-    bsdf.inputs["Metallic"].default_value = metallic
-    return material
-
-
-def wood_mat(name, base, grain, dark_line):
-    material = mat(name, base, 0.78)
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    bsdf = nodes.get("Principled BSDF")
-
-    coord = nodes.new("ShaderNodeTexCoord")
-    mapping = nodes.new("ShaderNodeMapping")
-    mapping.inputs["Scale"].default_value = (0.85, 2.8, 10.0)
-    noise = nodes.new("ShaderNodeTexNoise")
-    noise.inputs["Scale"].default_value = 18.0
-    noise.inputs["Detail"].default_value = 13.0
-    noise.inputs["Roughness"].default_value = 0.62
-    ramp = nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].position = 0.22
-    ramp.color_ramp.elements[0].color = dark_line
-    ramp.color_ramp.elements[1].position = 1.0
-    ramp.color_ramp.elements[1].color = grain
-    bump = nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.055
-    bump.inputs["Distance"].default_value = 0.075
-
-    links.new(coord.outputs["Generated"], mapping.inputs["Vector"])
-    links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
-    links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
-    links.new(noise.outputs["Fac"], bump.inputs["Height"])
-    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-    return material
-
-
-def gold_mat(name):
-    material = mat(name, (0.78, 0.56, 0.20, 1), 0.58, 0.28)
-    nodes = material.node_tree.nodes
-    bsdf = nodes.get("Principled BSDF")
-    bsdf.inputs["Specular IOR Level"].default_value = 0.48
-    return material
-
-
-def paint_mat(name, base, highlight, shadow):
-    material = mat(name, base, 0.54)
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    bsdf = nodes.get("Principled BSDF")
-
-    coord = nodes.new("ShaderNodeTexCoord")
-    noise = nodes.new("ShaderNodeTexNoise")
-    noise.inputs["Scale"].default_value = 7.0
-    noise.inputs["Detail"].default_value = 6.0
-    noise.inputs["Roughness"].default_value = 0.56
-    wave = nodes.new("ShaderNodeTexWave")
-    wave.inputs["Scale"].default_value = 26.0
-    wave.inputs["Distortion"].default_value = 4.0
-    ramp = nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].position = 0.10
-    ramp.color_ramp.elements[0].color = shadow
-    ramp.color_ramp.elements[1].position = 1.0
-    ramp.color_ramp.elements[1].color = highlight
-    mix = nodes.new("ShaderNodeMix")
-    mix.data_type = "RGBA"
-    mix.inputs["Factor"].default_value = 0.045
-    bump = nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.030
-    bump.inputs["Distance"].default_value = 0.055
-
-    links.new(coord.outputs["Generated"], noise.inputs["Vector"])
-    links.new(coord.outputs["Generated"], wave.inputs["Vector"])
-    links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-    links.new(ramp.outputs["Color"], mix.inputs["A"])
-    links.new(wave.outputs["Color"], mix.inputs["B"])
-    links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
-    links.new(noise.outputs["Fac"], bump.inputs["Height"])
-    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-    return material
-
-
-def look_at(obj, target):
-    direction = Vector(target) - obj.location
-    obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
-
-
-def add_cube(name, loc, scale, material, bevel=0.0):
-    bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
-    obj = bpy.context.object
-    obj.name = name
-    obj.dimensions = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    if material:
-        obj.data.materials.append(material)
-    if bevel > 0:
-        mod = obj.modifiers.new("soft bevel", "BEVEL")
-        mod.width = bevel
-        mod.segments = 2
-        obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_ellipsoid(name, loc, scale, material, segments=16, rings=8):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, radius=1.0, location=loc)
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = scale
-    if material:
-        obj.data.materials.append(material)
-    obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_panel_frame(name, center, width, height, depth, materials, frame="gold", inset="red_paint"):
-    x, y, z = center
-    frame_mat = materials[frame]
-    inset_mat = materials[inset]
-    add_cube(f"{name}_inset", (x, y, z), (width, height, depth), inset_mat, 0.006)
-    add_cube(f"{name}_top", (x, y + height * 0.5, z + depth * 0.02), (width + 0.06, 0.026, depth * 1.16), frame_mat, 0.006)
-    add_cube(f"{name}_bottom", (x, y - height * 0.5, z + depth * 0.02), (width + 0.06, 0.026, depth * 1.16), frame_mat, 0.006)
-    add_cube(f"{name}_left", (x - width * 0.5, y, z + depth * 0.025), (0.026, height + 0.040, depth * 1.18), frame_mat, 0.006)
-    add_cube(f"{name}_right", (x + width * 0.5, y, z + depth * 0.025), (0.026, height + 0.040, depth * 1.18), frame_mat, 0.006)
-
-
-def recalc_outward_normals(mesh):
-    # from_pydata does not guarantee consistent winding; inverted faces make the
-    # bevel modifier flare rims outward into curled corner spikes.
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    bm.to_mesh(mesh)
-    bm.free()
-
-
-def add_tapered_box(name, loc, bottom_width, top_width, height, depth, material, bevel=0.0):
-    x0 = bottom_width * 0.5
-    x1 = top_width * 0.5
-    y0 = height * 0.5
-    z0 = depth * 0.5
-    verts = [
-        (-x0, -y0, -z0), (x0, -y0, -z0), (x0, -y0, z0), (-x0, -y0, z0),
-        (-x1, y0, -z0), (x1, y0, -z0), (x1, y0, z0), (-x1, y0, z0),
-    ]
-    faces = [
-        (0, 1, 2, 3), (4, 7, 6, 5),
-        (0, 4, 5, 1), (1, 5, 6, 2),
-        (2, 6, 7, 3), (3, 7, 4, 0),
-    ]
-    mesh = bpy.data.meshes.new(f"{name}Mesh")
-    mesh.from_pydata(verts, [], faces)
-    recalc_outward_normals(mesh)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    obj.location = loc
-    bpy.context.collection.objects.link(obj)
-    if material:
-        obj.data.materials.append(material)
-    if bevel > 0:
-        mod = obj.modifiers.new("soft bevel", "BEVEL")
-        mod.width = bevel
-        mod.segments = 3
-        obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_stern_gallery_tier(
-    name,
-    y_bottom,
-    y_top,
-    z_front,
-    z_back,
-    front_bottom_width,
-    back_bottom_width,
-    front_top_width,
-    back_top_width,
-    material,
-    bevel=0.0,
-):
-    cols = [-1.0, -0.5, 0.0, 0.5, 1.0]
-    verts = []
-    idx = {}
-    for depth in (0, 1):
-        for level, y in enumerate((y_bottom, y_top)):
-            for col, u in enumerate(cols):
-                if depth == 0:
-                    width = front_bottom_width if level == 0 else front_top_width
-                    z = z_front
-                else:
-                    width = back_bottom_width if level == 0 else back_top_width
-                    curve = 0.0
-                    rake = 0.0
-                    z = z_back + curve + rake
-                idx[(depth, level, col)] = len(verts)
-                verts.append((u * width * 0.5, y, z))
-
-    faces = []
-    for depth in (0, 1):
-        for col in range(len(cols) - 1):
-            face = (
-                idx[(depth, 0, col)],
-                idx[(depth, 0, col + 1)],
-                idx[(depth, 1, col + 1)],
-                idx[(depth, 1, col)],
-            )
-            faces.append(face if depth == 0 else tuple(reversed(face)))
-    for level in (0, 1):
-        for col in range(len(cols) - 1):
-            faces.append((
-                idx[(0, level, col)],
-                idx[(1, level, col)],
-                idx[(1, level, col + 1)],
-                idx[(0, level, col + 1)],
-            ))
-    for side_col in (0, len(cols) - 1):
-        faces.append((
-            idx[(0, 0, side_col)],
-            idx[(0, 1, side_col)],
-            idx[(1, 1, side_col)],
-            idx[(1, 0, side_col)],
-        ))
-
-    mesh = bpy.data.meshes.new(f"{name}Mesh")
-    mesh.from_pydata(verts, [], faces)
-    recalc_outward_normals(mesh)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-    if material:
-        obj.data.materials.append(material)
-    if bevel > 0:
-        mod = obj.modifiers.new("soft bevel", "BEVEL")
-        mod.width = bevel
-        mod.segments = 3
-        obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_cylinder_between(name, start, end, radius, material, vertices=16):
-    start = Vector(start)
-    end = Vector(end)
-    mid = (start + end) * 0.5
-    length = (end - start).length
-    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=length, location=mid)
-    obj = bpy.context.object
-    obj.name = name
-    obj.rotation_euler = (end - start).to_track_quat("Z", "Y").to_euler()
-    if material:
-        obj.data.materials.append(material)
-    obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_spar(name, start, end, radius_base, radius_tip, material, vertices=14):
-    # Tapered spar (mast, topmast, lateen yard): a cone frustum between two points.
-    start = Vector(start)
-    end = Vector(end)
-    mid = (start + end) * 0.5
-    length = (end - start).length
-    bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius_base, radius2=radius_tip, depth=length, location=mid)
-    obj = bpy.context.object
-    obj.name = name
-    obj.rotation_euler = (end - start).to_track_quat("Z", "Y").to_euler()
-    if material:
-        obj.data.materials.append(material)
-    obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    return obj
-
-
-def add_polyline(name, points, radius, material):
-    curve = bpy.data.curves.new(name, "CURVE")
-    curve.dimensions = "3D"
-    curve.resolution_u = 2
-    curve.bevel_depth = radius
-    curve.bevel_resolution = 3
-    spline = curve.splines.new("POLY")
-    spline.points.add(len(points) - 1)
-    for point, co in zip(spline.points, points):
-        point.co = (co[0], co[1], co[2], 1.0)
-    obj = bpy.data.objects.new(name, curve)
-    bpy.context.collection.objects.link(obj)
-    if material:
-        curve.materials.append(material)
-    return obj
-
-
-def add_window(name, loc, size, materials):
-    gold = materials["gold"]
-    black = materials["black"]
-    red = materials["red_paint"]
-    add_cube(f"{name}_gold_outer", loc, (size[0] * 1.18, size[1] * 1.16, size[2]), gold, 0.008)
-    add_cube(f"{name}_red_inner_frame", (loc[0], loc[1], loc[2] + size[2] * 0.18), (size[0], size[1] * 0.92, size[2] * 1.12), red, 0.008)
-    add_cube(f"{name}_dark_glass", (loc[0], loc[1], loc[2] + size[2] * 0.42), (size[0] * 0.62, size[1] * 0.62, size[2] * 1.18), black, 0.004)
-
-
-def add_hull_side_box(name, side, z, t, size, material, offset=0.055, bevel=0.0):
-    x, y, _ = side_point(z, side, t, offset)
-    return add_cube(name, (x, y, z), size, material, bevel)
-
-
-def add_side_gunport(name, side, z, t, materials, size=0.16):
-    gold = materials["gold"]
-    red = materials["red_paint"]
-    black = materials["black"]
-    dark = materials["dark_wood"]
-    # The whole assembly is oriented to the local hull skin and hugs it, so the
-    # port reads as recessed into the planking instead of pasted proud of it:
-    # a dark cut ring at the surface, a thin wood architrave just proud of the
-    # ring, then reveal/port faces stacked barely above that.
-    frame = hull_surface_frame(z, side, t)
-    add_surface_cube(f"{name}_shadow_cut_ring", frame, (0.000, 0.0, 0.0), (0.020, size * 1.42, size * 1.52), black, 0.003)
-    add_surface_cube(f"{name}_wood_recess", frame, (0.005, 0.0, 0.0), (0.030, size * 1.14, size * 1.26), dark, 0.006)
-    add_surface_cube(f"{name}_structural_lintel", frame, (0.016, size * 0.62, 0.0), (0.020, 0.024, size * 1.34), gold, 0.004)
-    add_surface_cube(f"{name}_structural_sill", frame, (0.016, -size * 0.62, 0.0), (0.020, 0.024, size * 1.34), gold, 0.004)
-    add_surface_cube(f"{name}_red_reveal", frame, (0.013, 0.0, 0.0), (0.022, size * 0.82, size * 0.90), red, 0.006)
-    add_surface_cube(f"{name}_dark_port", frame, (0.021, 0.0, 0.0), (0.016, size * 0.46, size * 0.54), black, 0.003)
-
-
-def add_shaped_deck(name, z_values, materials, t=0.985, inset=0.020, lift=0.050):
-    wood = materials["wood"]
-    dark = materials["dark_wood"]
-    verts = []
-    for z in z_values:
-        left = side_point(z, -1, t, -inset)
-        right = side_point(z, 1, t, -inset)
-        y = max(left[1], right[1]) + lift
-        verts.append((left[0], y, z))
-        verts.append((right[0], y, z))
-
-    faces = []
-    for i in range(len(z_values) - 1):
-        faces.append((i * 2, i * 2 + 1, i * 2 + 3, i * 2 + 2))
-
-    mesh = bpy.data.meshes.new(f"{name}Mesh")
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-    obj.data.materials.append(wood)
-    obj.modifiers.new("deck weighted normals", "WEIGHTED_NORMAL")
-    bevel = obj.modifiers.new("soft shaped deck edge", "BEVEL")
-    bevel.width = 0.018
-    bevel.segments = 2
-
-    for z in z_values[1:-1:2]:
-        left = side_point(z, -1, t, -inset - 0.030)
-        right = side_point(z, 1, t, -inset - 0.030)
-        y = max(left[1], right[1]) + lift + 0.018
-        add_cube(f"{name}_plank_separator_{z:.2f}", (0, y, z), (abs(right[0] - left[0]), 0.014, 0.018), dark, 0.002)
-
-    return obj
 
 
 def add_stern_stairs(side, materials):
@@ -613,95 +286,6 @@ def add_sterncastle_anchor(materials):
     add_cube("Sterncastle_counter_shadow_tuck", (0, 0.89, 2.48), (1.02, 0.040, 0.30), black, 0.010)
 
 
-def add_mast_assembly(name, z, total_height, base_radius, materials, square_yards=(), lateen=False):
-    # Full mast: tapered lower mast rising from the deck partner, a round top
-    # platform, an overlapping tapered topmast with a gold doubling band, and a
-    # gold masthead finial. Square-rig masts get course/topsail yards across x;
-    # the mizzen gets a raked lateen yard instead. Heights are fractions of
-    # total_height above the deck so all three masts share proportions.
-    dark = materials["dark_wood"]
-    gold = materials["gold"]
-    black = materials["black"]
-    _, deck_y, _ = side_point(z, 1, 0.985, -0.020)
-    base_y = deck_y - 0.075
-    top_y = deck_y + total_height
-    lower_top = deck_y + total_height * 0.60
-
-    # Deck partner hardware (classified under Deck: it stays when a mast hides).
-    add_cube(f"MastPartner_dark_socket_{name}", (0, deck_y + 0.015, z), (base_radius * 3.4, 0.060, base_radius * 3.4), dark, 0.014)
-    add_cube(f"MastPartner_shadow_recess_{name}", (0, deck_y + 0.052, z), (base_radius * 2.45, 0.020, base_radius * 2.45), black, 0.008)
-    add_cylinder_between(f"MastPartner_gold_front_band_{name}", (-base_radius * 1.9, deck_y + 0.066, z - base_radius * 1.9), (base_radius * 1.9, deck_y + 0.066, z - base_radius * 1.9), 0.010, gold, 8)
-    add_cylinder_between(f"MastPartner_gold_back_band_{name}", (-base_radius * 1.9, deck_y + 0.066, z + base_radius * 1.9), (base_radius * 1.9, deck_y + 0.066, z + base_radius * 1.9), 0.010, gold, 8)
-
-    add_spar(f"Mast_lower_{name}", (0, base_y, z), (0, lower_top, z), base_radius, base_radius * 0.62, dark, 18)
-    band_y = deck_y + min(0.32, total_height * 0.34)
-    add_cylinder_between(f"gold_mast_band_{name}", (0, band_y - 0.016, z), (0, band_y + 0.016, z), base_radius * 1.06, gold, 14)
-
-    platform_r = base_radius * 1.85
-    add_cylinder_between(f"Mast_top_platform_{name}", (0, lower_top - 0.062, z), (0, lower_top - 0.022, z), platform_r, dark, 18)
-    add_cylinder_between(f"Mast_top_platform_gold_rim_{name}", (0, lower_top - 0.070, z), (0, lower_top - 0.058, z), platform_r * 1.03, gold, 18)
-
-    topmast_base = lower_top - total_height * 0.08
-    add_spar(f"Mast_topmast_{name}", (0, topmast_base, z), (0, top_y, z), base_radius * 0.55, base_radius * 0.30, dark, 14)
-    add_cylinder_between(f"Mast_doubling_gold_band_{name}", (0, lower_top - 0.115, z), (0, lower_top - 0.085, z), base_radius * 0.80, gold, 14)
-    add_ellipsoid(f"Mast_head_gold_finial_{name}", (0, top_y + 0.035, z), (0.030, 0.040, 0.030), gold, 10, 6)
-
-    def mast_radius_at(y):
-        # Piecewise linear taper matching the two spar segments above.
-        if y <= lower_top:
-            f = (y - base_y) / (lower_top - base_y)
-            return base_radius * (1.0 - 0.38 * f)
-        f = (y - topmast_base) / (top_y - topmast_base)
-        return base_radius * (0.55 - 0.25 * f)
-
-    for suffix, height_fraction, span, radius in square_yards:
-        y = deck_y + total_height * height_fraction
-        add_cylinder_between(f"Yard_{suffix}_{name}", (-span * 0.5, y, z), (span * 0.5, y, z), radius, dark, 12)
-        sling_radius = max(radius * 1.55, mast_radius_at(y) * 1.22)
-        add_cylinder_between(f"Yard_{suffix}_gold_sling_{name}", (0, y - 0.030, z), (0, y + 0.030, z), sling_radius, gold, 10)
-
-    if lateen:
-        # Raked lateen yard: forward-low to aft-high, crossing the mast a bit
-        # above half height; the high end overhangs the sterncastle as on the
-        # concept sheet.
-        cross_y = deck_y + total_height * 0.55
-        half = 1.02
-        dy = 0.67 * half
-        dz = 0.74 * half
-        add_spar(f"Yard_lateen_{name}", (0, cross_y - dy, z - dz), (0, cross_y + dy, z + dz), 0.027, 0.017, dark, 12)
-        add_cylinder_between(f"Yard_lateen_gold_sling_{name}", (0, cross_y - 0.030, z), (0, cross_y + 0.030, z), base_radius * 0.72, gold, 10)
-
-
-def add_sail(name, point_fn, material, nx=13, ny=11):
-    # Deformable sail sheet: an even nx x ny quad grid (future wind/damage
-    # deformation needs this topology), smooth-shaded, with a thin solidify so
-    # both faces light correctly in Cycles and in Godot after export.
-    verts = []
-    faces = []
-    for r in range(ny + 1):
-        v = r / ny
-        for c in range(nx + 1):
-            u = c / nx
-            verts.append(point_fn(u, v))
-    for r in range(ny):
-        for c in range(nx):
-            a = r * (nx + 1) + c
-            faces.append((a, a + 1, a + nx + 2, a + nx + 1))
-    mesh = bpy.data.meshes.new(f"{name}Mesh")
-    mesh.from_pydata(verts, [], faces)
-    recalc_outward_normals(mesh)
-    mesh.update()
-    for poly in mesh.polygons:
-        poly.use_smooth = True
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-    obj.data.materials.append(material)
-    solid = obj.modifiers.new("canvas thickness", "SOLIDIFY")
-    solid.thickness = 0.014
-    solid.offset = 0.0
-    return obj
-
-
 def add_flags_and_anchors(materials):
     # Streamers fly aft off the mastheads like the concept sheet's banners.
     # The faction flag itself stays procedural in Godot (ADR 0010) — the model
@@ -736,38 +320,6 @@ def add_flags_and_anchors(materials):
     anchor("Anchor_Flag_Main", (0.0, 3.96, -0.05))
     anchor("Anchor_Fire_Deck", (0.0, 1.05, 0.12))
     anchor("Anchor_Fire_Sail", (0.0, 2.35, -0.05))
-
-
-def rope_points(start, end, drop=0.03, samples=5):
-    # Straight run with a light parabolic sag so lines read as rope, not wire.
-    start = Vector(start)
-    end = Vector(end)
-    pts = []
-    for i in range(samples):
-        t = i / (samples - 1)
-        p = start.lerp(end, t)
-        p.y -= drop * math.sin(math.pi * t)
-        pts.append(tuple(p))
-    return pts
-
-
-def add_rope_bundle(name, ropes, radius, material):
-    # One curve object holding every rope of a rigging group as its own POLY
-    # spline — the group exports as a single mesh with no per-rope objects.
-    curve = bpy.data.curves.new(f"{name}Curve", "CURVE")
-    curve.dimensions = "3D"
-    curve.resolution_u = 2
-    curve.bevel_depth = radius
-    curve.bevel_resolution = 2
-    for pts in ropes:
-        spline = curve.splines.new("POLY")
-        spline.points.add(len(pts) - 1)
-        for point, co in zip(spline.points, pts):
-            point.co = (co[0], co[1], co[2], 1.0)
-    obj = bpy.data.objects.new(name, curve)
-    bpy.context.collection.objects.link(obj)
-    curve.materials.append(material)
-    return obj
 
 
 def add_rigging(materials):
@@ -896,142 +448,19 @@ def station_profile():
     ]
 
 
+FORM = HullForm(station_profile())
+
+
 def side_point(z, side, t, offset=0.0):
-    stations = station_profile()
-    lower = stations[0]
-    upper = stations[-1]
-    for i in range(len(stations) - 1):
-        if stations[i][0] >= z >= stations[i + 1][0]:
-            lower = stations[i]
-            upper = stations[i + 1]
-            break
-    span = lower[0] - upper[0]
-    f = 0 if span == 0 else (lower[0] - z) / span
-    half_width = lower[1] + (upper[1] - lower[1]) * f
-    deck_y = lower[2] + (upper[2] - lower[2]) * f
-    keel_y = lower[3] + (upper[3] - lower[3]) * f
-    y = keel_y + (deck_y - keel_y) * t
-    beam = half_width * (math.sin(t * math.pi * 0.5) ** 0.58)
-    tumblehome = 1.0 - max(0.0, t - 0.72) * 0.28
-    return (side * (beam * tumblehome + offset), y, z)
-
-
-def hull_mesh_point(z, side, t):
-    # Exact point on the create_hull skin (pre-bevel): replicates the station
-    # vertex math, including the per-station sheer softener, and interpolates
-    # linearly between stations the same way the mesh faces do.
-    stations = station_profile()
-
-    def station_vert(si):
-        sz, half_width, deck_y, keel_y = stations[si]
-        y = keel_y + (deck_y - keel_y) * t
-        beam = half_width * (math.sin(t * math.pi * 0.5) ** 0.66)
-        tumblehome = 1.0 - max(0.0, t - 0.70) * 0.34
-        softener = 1.0 - 0.05 * math.cos((sz + 0.25) * math.pi)
-        z_raked = sz
-        if si == len(stations) - 1:
-            z_raked = sz + 0.50 * (1.0 - t) - 0.18 * t
-        elif si == len(stations) - 2:
-            z_raked = sz + 0.18 * (1.0 - t) - 0.06 * t
-        return Vector((side * beam * tumblehome * softener, y, z_raked))
-
-    lo, hi = 0, len(stations) - 1
-    for i in range(len(stations) - 1):
-        if stations[i][0] >= z >= stations[i + 1][0]:
-            lo, hi = i, i + 1
-            break
-    a = station_vert(lo)
-    b = station_vert(hi)
-    span = a.z - b.z
-    f = 0.0 if span == 0 else (a.z - z) / span
-    return a + (b - a) * min(max(f, 0.0), 1.0)
+    return FORM.side_point(z, side, t, offset)
 
 
 def hull_surface_frame(z, side, t):
-    # Local frame on the hull skin: origin on the surface, e_x the outboard
-    # surface normal, e_y up along the skin, e_z along the hull run.
-    p0 = hull_mesh_point(z, side, t)
-    dz = hull_mesh_point(z + 0.05, side, t) - hull_mesh_point(z - 0.05, side, t)
-    t_lo = max(t - 0.05, 0.02)
-    t_hi = min(t + 0.05, 0.995)
-    dt = hull_mesh_point(z, side, t_hi) - hull_mesh_point(z, side, t_lo)
-    normal = dz.cross(dt)
-    if normal.x * side < 0:
-        normal = -normal
-    e_x = normal.normalized()
-    e_y = (dt - dt.project(e_x)).normalized()
-    e_z = e_x.cross(e_y)
-    return p0 + e_x * 0.003, e_x, e_y, e_z
-
-
-def add_surface_cube(name, frame, local_offset, size, material, bevel=0.0):
-    # A cube oriented to a hull_surface_frame: local x runs outboard along the
-    # surface normal, y up the skin, z along the hull.
-    origin, e_x, e_y, e_z = frame
-    loc = origin + e_x * local_offset[0] + e_y * local_offset[1] + e_z * local_offset[2]
-    obj = add_cube(name, tuple(loc), size, material, bevel)
-    obj.rotation_euler = Matrix((e_x, e_y, e_z)).transposed().to_euler()
-    return obj
+    return FORM.surface_frame(z, side, t)
 
 
 def create_hull(materials):
-    stations = station_profile()
-    rows = 14
-    verts = []
-    index = {}
-    for side in (-1, 1):
-        for si, (z, half_width, deck_y, keel_y) in enumerate(stations):
-            for row in range(rows + 1):
-                t = row / rows
-                y = keel_y + (deck_y - keel_y) * t
-                beam = half_width * (math.sin(t * math.pi * 0.5) ** 0.66)
-                tumblehome = 1.0 - max(0.0, t - 0.70) * 0.34
-                sheer_softener = 1.0 - 0.05 * math.cos((z + 0.25) * math.pi)
-                z_raked = z
-                if si == len(stations) - 1:
-                    z_raked = z + 0.50 * (1.0 - t) - 0.18 * t
-                elif si == len(stations) - 2:
-                    z_raked = z + 0.18 * (1.0 - t) - 0.06 * t
-                index[(side, si, row)] = len(verts)
-                verts.append((side * beam * tumblehome * sheer_softener, y, z_raked))
-
-    faces = []
-    mat_ids = []
-    for side in (-1, 1):
-        for si in range(len(stations) - 1):
-            for row in range(rows):
-                a = index[(side, si, row)]
-                b = index[(side, si + 1, row)]
-                c = index[(side, si + 1, row + 1)]
-                d = index[(side, si, row + 1)]
-                faces.append((a, b, c, d) if side == 1 else (d, c, b, a))
-                mat_ids.append(0 if row < 5 else 1)
-
-    # Close bottom, bow, and stern so the transparent render reads as a solid object.
-    for si in range(len(stations) - 1):
-        faces.append((index[(-1, si, 0)], index[(1, si, 0)], index[(1, si + 1, 0)], index[(-1, si + 1, 0)]))
-        mat_ids.append(0)
-    for row in range(rows):
-        faces.append((index[(-1, 0, row)], index[(-1, 0, row + 1)], index[(1, 0, row + 1)], index[(1, 0, row)]))
-        mat_ids.append(0)
-        last = len(stations) - 1
-        faces.append((index[(-1, last, row)], index[(1, last, row)], index[(1, last, row + 1)], index[(-1, last, row + 1)]))
-        mat_ids.append(1)
-
-    mesh = bpy.data.meshes.new("GalleonHullMesh")
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    hull = bpy.data.objects.new("Hull_curved_galleon_body", mesh)
-    bpy.context.collection.objects.link(hull)
-    hull.data.materials.append(materials["dark_wood"])
-    hull.data.materials.append(materials["red_paint"])
-    for poly, material_index in zip(hull.data.polygons, mat_ids):
-        poly.material_index = material_index
-    hull.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
-    bevel = hull.modifiers.new("broad soft bevel", "BEVEL")
-    bevel.width = 0.035
-    bevel.segments = 4
-    return hull
+    return kit_create_hull(FORM, materials, mesh_name="GalleonHullMesh", object_name="Hull_curved_galleon_body")
 
 
 def decorate_hull(materials):
@@ -1062,7 +491,7 @@ def decorate_hull(materials):
     # Runs all the way aft under the sterncastle so top-down views never see
     # into the open hull shell beside the castle walls.
     deck_z = [2.62, 2.48, 2.34, 1.96, 1.58, 1.20, 0.82, 0.44, 0.06, -0.32, -0.70, -1.08, -1.46, -1.84, -2.22, -2.58]
-    add_shaped_deck("Deck_shaped_to_hull_planks", deck_z, materials)
+    add_shaped_deck(FORM, "Deck_shaped_to_hull_planks", deck_z, materials)
     add_cube("Deck_central_hatch_frame", (0, 1.105, 0.42), (0.46, 0.055, 0.34), dark, 0.018)
     add_cube("Deck_central_hatch_recess", (0, 1.138, 0.42), (0.34, 0.028, 0.24), materials["black"], 0.010)
     for x in [-0.13, 0.0, 0.13]:
@@ -1133,11 +562,11 @@ def decorate_hull(materials):
     upper_ports = [1.76, 1.30, 0.84, 0.38, -0.08, -0.54, -1.00, -1.46]
     for side in (-1, 1):
         for i, z in enumerate(lower_ports):
-            add_side_gunport(f"lower_gundeck_port_{side}_{i}", side, z, 0.43, materials, size=0.178)
+            add_side_gunport(FORM, f"lower_gundeck_port_{side}_{i}", side, z, 0.43, materials, size=0.178)
             origin, e_x, _, _ = hull_surface_frame(z, side, 0.43)
             add_cylinder_between(f"lower_deck_cannon_{side}_{i}", tuple(origin - e_x * 0.06), tuple(origin + e_x * 0.11), 0.024, black, 12)
         for i, z in enumerate(upper_ports):
-            add_side_gunport(f"upper_gundeck_port_{side}_{i}", side, z, 0.66, materials, size=0.168)
+            add_side_gunport(FORM, f"upper_gundeck_port_{side}_{i}", side, z, 0.66, materials, size=0.168)
             origin, e_x, _, _ = hull_surface_frame(z, side, 0.66)
             add_cylinder_between(f"upper_deck_cannon_{side}_{i}", tuple(origin - e_x * 0.06), tuple(origin + e_x * 0.10), 0.021, black, 12)
 
@@ -1195,14 +624,16 @@ def decorate_hull(materials):
     # Full mast assemblies (heights match the galleon_basic visual profile so
     # the exported model stays drop-in for the existing gameplay slot).
     add_mast_assembly(
+        FORM,
         "fore", -1.08, 2.70, 0.070, materials,
         square_yards=[("lower", 0.47, 1.55, 0.030), ("upper", 0.90, 1.18, 0.024)],
     )
     add_mast_assembly(
+        FORM,
         "main", -0.05, 3.20, 0.085, materials,
         square_yards=[("lower", 0.47, 2.05, 0.034), ("upper", 0.90, 1.50, 0.027)],
     )
-    add_mast_assembly("mizzen", 1.05, 2.55, 0.060, materials, lateen=True)
+    add_mast_assembly(FORM, "mizzen", 1.05, 2.55, 0.060, materials, lateen=True)
 
     # Bowsprit, beakhead structure, and simple figurehead silhouette.
     add_cylinder_between("Bowsprit_dark_wood", (0, 1.28, -2.46), (0, 2.06, -3.30), 0.055, dark, 16)
@@ -1292,54 +723,23 @@ ASSEMBLY_TREE = {
 
 def classify_ship_object(name):
     n = name.lower()
-    if n.startswith(("mast_", "yard_", "sail_", "rigging_", "gold_mast_band_")):
-        for key, assembly in MAST_ASSEMBLIES.items():
-            if n.endswith("_" + key):
-                return assembly
-    if n.startswith(("streamer_", "anchor_flag")):
-        return "Flags"
-    if n.startswith("anchor_fire"):
-        return "EffectsAnchors"
-    if n.startswith("mastpartner_"):
-        # Deck socket hardware stays visible when a mast assembly is hidden.
-        return "Deck"
-    if n.startswith("bowsprit_"):
-        return "BowspritAssembly"
-    if "gundeck_port" in n:
-        return "Gunports"
-    if "deck_cannon" in n:
-        return "Cannons"
+    # Galleon-specific rules first, then the kit's cross-ship prefixes.
     if n.startswith("sterncastle_rail_corner_stanchion"):
         # Part of the bulwark fall barrier, not the castle mass.
         return "Railings"
     if n.startswith(("sterncastle", "stern_", "balcony_")):
         return "Sterncastle"
-    if n.startswith(("rail_post", "top_rail_", "mid_rail_")):
-        return "Railings"
     if n.startswith(("bow_deck_closing_heavy_cheek_rail", "bow_front_cross_rail")):
         return "Railings"
-    if n.startswith(("deck_", "quarterdeck_")):
-        return "Deck"
+    common = classify_common(n, MAST_ASSEMBLIES)
+    if common is not None:
+        return common
     if n.startswith(("hull_", "wood_plank_line_", "gold_hull_sheer_", "bow_", "figurehead_", "gold_rivet_", "painted_hull_panel_divider_")):
         return "HullMesh"
     return None
 
 
 def organize_assemblies():
-    # Runs right after decorate_hull, while every scene object is ship geometry
-    # (lights/camera/origin marker are added afterwards and stay unparented).
-    # Parents preserve world transforms, so this pass must not move a vertex.
-    ship_objects = list(bpy.context.scene.objects)
-
-    def add_empty(name, location=(0.0, 0.0, 0.0), parent=None):
-        empty = bpy.data.objects.new(name, None)
-        empty.empty_display_size = 0.1
-        empty.location = location
-        bpy.context.collection.objects.link(empty)
-        if parent is not None:
-            empty.parent = parent
-        return empty
-
     def mast_deck_point(z):
         _, deck_y, _ = side_point(z, 1, 0.985, -0.020)
         return (0.0, deck_y, z)
@@ -1351,106 +751,7 @@ def organize_assemblies():
         "MizzenAssembly": mast_deck_point(1.05),
         "BowspritAssembly": (0.0, 1.28, -2.46),
     }
-
-    root = add_empty("Galleon")
-    groups = {}
-    for assembly, children in ASSEMBLY_TREE.items():
-        assembly_empty = add_empty(assembly, assembly_locations.get(assembly, (0.0, 0.0, 0.0)), root)
-        groups[assembly] = assembly_empty
-        for child in children:
-            groups[child] = add_empty(child, parent=assembly_empty)
-
-    bpy.context.view_layer.update()
-
-    unclassified = []
-    counts = {}
-    for obj in ship_objects:
-        group_name = classify_ship_object(obj.name)
-        if group_name is None:
-            unclassified.append(obj.name)
-            group_name = "HullMesh"
-        group = groups[group_name]
-        obj.parent = group
-        obj.matrix_parent_inverse = group.matrix_world.inverted()
-        counts[group_name] = counts.get(group_name, 0) + 1
-
-    print("assembly organization:")
-    for group_name in sorted(counts):
-        print(f"  {group_name}: {counts[group_name]} objects")
-    if unclassified:
-        print(f"  WARNING {len(unclassified)} unclassified (defaulted to HullMesh):")
-        for name in unclassified:
-            print(f"    {name}")
-
-
-def add_lighting_and_camera():
-    bpy.context.scene.render.engine = "CYCLES"
-    bpy.context.scene.cycles.samples = 128
-    bpy.context.scene.render.film_transparent = False
-    bpy.context.scene.view_settings.view_transform = "Standard"
-    bpy.context.scene.view_settings.look = "Medium High Contrast"
-    bpy.context.scene.view_settings.exposure = 0.25
-    bpy.context.scene.view_settings.gamma = 1.0
-    bpy.context.scene.world.color = (0.58, 0.55, 0.50)
-    bpy.context.scene.render.resolution_x = 2800
-    bpy.context.scene.render.resolution_y = 1700
-
-    bpy.ops.object.light_add(type="AREA", location=(-4.8, 6.2, -5.6))
-    key = bpy.context.object
-    key.name = "Large warm soft key light"
-    key.data.energy = 3600
-    key.data.size = 7.5
-    key.data.color = (1.0, 0.82, 0.60)
-    bpy.ops.object.light_add(type="AREA", location=(5.2, 4.0, 4.4))
-    fill = bpy.context.object
-    fill.name = "Broad neutral fill light"
-    fill.data.energy = 2100
-    fill.data.size = 9.0
-    fill.data.color = (0.82, 0.88, 1.0)
-    bpy.ops.object.light_add(type="AREA", location=(-2.2, 3.7, 4.8))
-    top = bpy.context.object
-    top.name = "Soft overhead reveal light"
-    top.data.energy = 900
-    top.data.size = 6.0
-    top.data.color = (1.0, 0.92, 0.78)
-    bpy.ops.object.light_add(type="POINT", location=(3.0, 2.8, 2.8))
-    rim = bpy.context.object
-    rim.name = "Small gold rim light"
-    rim.data.energy = 380
-    rim.data.color = (1.0, 0.76, 0.42)
-
-    bpy.ops.object.camera_add(location=(-8.2, 1.52, -0.45))
-    camera = bpy.context.object
-    camera.name = "Camera_primary_centered_hull_review"
-    look_at(camera, (0, 0.92, -0.45))
-    camera.data.type = "ORTHO"
-    camera.data.ortho_scale = 9.05
-    bpy.context.scene.camera = camera
-
-    bpy.ops.object.empty_add(type="PLAIN_AXES", location=(0, 0.55, 0))
-    bpy.context.object.name = "Origin_waterline_center_reference"
-    return camera
-
-
-def render_to(path, camera_location, target, ortho_scale, roll_degrees=0.0):
-    camera = bpy.context.scene.camera
-    camera.location = camera_location
-    look_at(camera, target)
-    if roll_degrees:
-        camera.rotation_euler.rotate_axis("Z", math.radians(roll_degrees))
-    camera.data.ortho_scale = ortho_scale
-    bpy.context.scene.render.filepath = str(path)
-    bpy.ops.render.render(write_still=True)
-
-
-def render_clay(path):
-    clay = mat("inspection warm clay", (0.62, 0.58, 0.52, 1), 0.72)
-    dark_clay = mat("inspection dark recess", (0.20, 0.18, 0.16, 1), 0.85)
-    for obj in bpy.context.scene.objects:
-        if hasattr(obj.data, "materials"):
-            obj.data.materials.clear()
-            obj.data.materials.append(dark_clay if "black" in obj.name.lower() or "recess" in obj.name.lower() else clay)
-    render_to(path, (-8.2, 1.52, -0.42), (0, 1.05, -0.42), 10.60, 90.0)
+    organize_assemblies_from("Galleon", ASSEMBLY_TREE, assembly_locations, classify_ship_object)
 
 
 def write_reference_notes():
@@ -1709,6 +1010,16 @@ curved bow, gun ports, and a strong side silhouette.
   stern mast) and Anchor_Flag_Main (main masthead) under Flags,
   Anchor_Fire_Deck and Anchor_Fire_Sail under EffectsAnchors at the
   gameplay-tuned visual_states positions from ship_visual_profiles.yaml
+
+2026-08-15 shared ship kit extraction:
+
+- moved the ship-agnostic machinery into artifacts/ship_kit (materials,
+  primitives, HullForm hull math with skin/gunport/shaped-deck builders,
+  mast assemblies, sail grids, rope bundles, assembly organization, the
+  review lighting/render rig, and the GLB flatten/export helpers) so the
+  next ship classes reuse it; this file now holds only galleon content
+- verified zero visual change: post-extraction renders match the previous
+  set pixel-for-pixel and the rebuilt GLB is structurally identical
 """
     (OUT_DIR / "reference_notes.md").write_text(text, encoding="utf-8")
 
@@ -1736,7 +1047,7 @@ def main():
     add_rigging(materials)
     add_flags_and_anchors(materials)
     organize_assemblies()
-    add_lighting_and_camera()
+    setup_review_scene()
 
     blend_path = OUT_DIR / "first_pass_galleon_hull.blend"
     bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
@@ -1747,7 +1058,7 @@ def main():
 
     render_to(OUT_DIR / "galleon_hull_refined_bow_readability_angle.png", (6.3, 3.45, -6.4), (0, 0.98, -0.72), 8.0)
     render_to(OUT_DIR / "galleon_hull_refined_bow_close.png", (4.5, 2.20, -5.0), (0, 0.98, -2.34), 3.8)
-    render_clay(OUT_DIR / "galleon_hull_refined_clay_inspection.png")
+    render_clay(OUT_DIR / "galleon_hull_refined_clay_inspection.png", (-8.2, 1.52, -0.42), (0, 1.05, -0.42), 10.60, 90.0)
     write_reference_notes()
 
 

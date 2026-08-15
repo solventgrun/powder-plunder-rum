@@ -253,3 +253,13 @@ curved bow, gun ports, and a strong side silhouette.
   stern mast) and Anchor_Flag_Main (main masthead) under Flags,
   Anchor_Fire_Deck and Anchor_Fire_Sail under EffectsAnchors at the
   gameplay-tuned visual_states positions from ship_visual_profiles.yaml
+
+2026-08-15 shared ship kit extraction:
+
+- moved the ship-agnostic machinery into artifacts/ship_kit (materials,
+  primitives, HullForm hull math with skin/gunport/shaped-deck builders,
+  mast assemblies, sail grids, rope bundles, assembly organization, the
+  review lighting/render rig, and the GLB flatten/export helpers) so the
+  next ship classes reuse it; this file now holds only galleon content
+- verified zero visual change: post-extraction renders match the previous
+  set pixel-for-pixel and the rebuilt GLB is structurally identical
