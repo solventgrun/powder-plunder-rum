@@ -40,7 +40,8 @@ ship_visual_profiles:
     name: Brigantine Basic
     scale: 1.12
     hull:
-      mode: procedural
+      mode: mesh
+      scene: res://game/scenes/BrigVisual.tscn
       length: 3.45
       width: 1.36
       height: 0.54
