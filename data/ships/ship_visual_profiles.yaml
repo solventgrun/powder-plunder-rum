@@ -89,7 +89,8 @@ ship_visual_profiles:
     name: Frigate Basic
     scale: 1.35
     hull:
-      mode: procedural
+      mode: mesh
+      scene: res://game/scenes/FrigateVisual.tscn
       length: 4.2
       width: 1.5
       height: 0.62
