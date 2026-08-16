@@ -750,6 +750,57 @@ Possible systems:
 - more advanced enemy tactics
 - battle result payloads for future overworld integration
 
+### Backlog Additions (2026-08-16)
+
+Added after the fleet visual pass (all four ship classes now sail Blender-built meshes). These are menu items like the milestones above, with one sequencing rule the user set: **boarding comes before post-battle consequences**, because together they complete the naval battle sequence — battle → boarding → duel → consequences.
+
+#### Boarding Duel — CROSS SWORDS
+
+A small, separate 2D minigame (per the distinct-minigames principle): when boarding conditions are met in a naval battle, the player crosses swords with the opposing captain in a 2D duel controlled on the **number pad**.
+
+Illustrative shape, not a fixed design:
+
+```text
+NUMPAD
+7 8 9    high cut   advance   high parry
+4 5 6    mid cut    feint     mid parry
+1 2 3    low cut    retreat   low parry
+```
+
+Design hooks already in place:
+
+- Crew and morale pools (ADR 0008) can gate when boarding is offered and scale the duel's stakes or difficulty.
+- Grape shot finally gets its strategic purpose: soften the crew before you board.
+- The duel outcome feeds post-battle consequences: win the duel and the ship strikes her colors (capture/plunder); lose and you are repelled (crew losses, the enemy fights on).
+
+Keep the duel readable and campy — a few clean actions with clear tells, not a fighting-game engine.
+
+#### Post-Battle Consequences
+
+Winning a battle currently just returns to the overworld. Add the first real "continuous consequences" payload: a post-battle result screen (gold, cargo, crew losses, prize decisions once boarding exists), and persistence — a sunk or captured NPC ship should not simply respawn on its route. Feeds directly into the Primitive Port milestone's economy (repair costs, selling plunder). Sequenced **after** the boarding duel.
+
+#### Audio Pass
+
+The game is currently near-silent (one placeholder cannon boom). For "share-ready" this is the largest missing pillar: ambient sea/wind/gulls, cannon fire with variation and distance falloff, impacts, splashes, sail-trim flap, UI clicks, and possibly a light shanty-style music bed. Needs a sourcing decision (procedural vs CC0 vs licensed) with the user per the asset-exception precedent (Cinzel font, ship models). Best sequenced once the full battle loop (including boarding) exists to be scored.
+
+#### Save / Load
+
+Unplanned until now; becomes necessary the moment ports and post-battle persistence create state worth keeping. Design it alongside the Primitive Port milestone rather than bolting it on after. Likely shape: serialize the YAML-derived session state (player ship, cargo, gold, NPC ship states, world clock) — keep it human-readable in the data-driven spirit.
+
+#### Multi-Ship Battle Readiness
+
+Pulled forward from the Advanced Naval Combat bucket now that four distinct classes exist: support 2-v-1 encounters (an escort joining its convoy, a patrol pair) before full fleet battles. Requires target selection/indicators for multiple hostiles, AI that doesn't collide with its ally, and encounter data that can spawn more than one ship. The fleet meshes make this the cheapest way to cash in the visual investment.
+
+#### Improved Cannon Mechanics — Galleon Double Broadside
+
+The galleon is the only ship in the game with two levels of guns, and its broadside should say so. Firing-pattern rule (user directive, 2026-08-16):
+
+- A side with **more than 12 guns** treats gun 13 and up as the second gun deck: each additional cannon pairs with a first-row cannon and fires a **small delay after it**, so the volley visually reads as two rows of shot, the second row growing with gun count until the cap is reached.
+- At a full loadout the pattern is **heavier in the middle** — two rows of shots landing nearly back-to-back, center-weighted — making the galleon the premier heavy gun platform.
+- The **frigate stays a solid single line of shot** — its broadside identity is the clean rolling rank, not the double wall. Class contrast is the point: the pattern should identify the ship before the silhouette does.
+
+Implementation home is `BroadsideController` (volley timing and muzzle positions are already per-side and count-aware); the rule should key off per-side carried gun count, not ship id, so any future two-decker inherits it.
+
 ## Guiding Question for Agents
 
 When implementing a system, ask:
