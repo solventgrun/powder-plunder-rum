@@ -3,7 +3,8 @@ ship_visual_profiles:
     name: Sloop Basic
     scale: 1.0
     hull:
-      mode: procedural
+      mode: mesh
+      scene: res://game/scenes/SloopVisual.tscn
       length: 3.0
       width: 1.2
       height: 0.46

@@ -1,9 +1,9 @@
 player_ship:
-  ship_type: galleon
+  ship_type: sloop
   faction: pirates
   visual_variant: worn
   sail_set: full
-  crew: 180
+  crew: 70
   modifications: []
   cargo_weight: 0
   broadsides:
@@ -13,29 +13,8 @@ player_ship:
         - light_4_pounder
         - light_4_pounder
         - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
     starboard:
       cannons:
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
+        - long_9_pounder
+        - long_9_pounder
+        - long_9_pounder
