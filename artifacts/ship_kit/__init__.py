@@ -15,7 +15,7 @@ from .assemblies import (
     classify_common,
     organize_assemblies_from,
 )
-from .canvas import add_anchor_empty, add_sail, add_square_sail, add_streamer
+from .canvas import add_anchor_empty, add_jib, add_sail, add_square_sail, add_streamer
 from .export import flatten_group, flatten_materials_for_export
 from .fittings import add_mast_assembly
 from .hullform import (

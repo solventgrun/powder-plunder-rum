@@ -15,7 +15,15 @@ def setup_review_scene():
     bpy.context.scene.view_settings.look = "Medium High Contrast"
     bpy.context.scene.view_settings.exposure = 0.25
     bpy.context.scene.view_settings.gamma = 1.0
-    bpy.context.scene.world.color = (0.58, 0.55, 0.50)
+    # Blender 5.x renders the world's node Background, not the legacy
+    # world.color (which only tints the viewport) — set both so the review
+    # background stays the documented warm light grey on every version.
+    world = bpy.context.scene.world
+    world.color = (0.58, 0.55, 0.50)
+    if world.node_tree is not None:
+        background = world.node_tree.nodes.get("Background")
+        if background is not None:
+            background.inputs["Color"].default_value = (0.58, 0.55, 0.50, 1.0)
     bpy.context.scene.render.resolution_x = 2800
     bpy.context.scene.render.resolution_y = 1700
 

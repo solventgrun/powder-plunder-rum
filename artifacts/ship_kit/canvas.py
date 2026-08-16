@@ -67,6 +67,30 @@ def add_streamer(name, root, length, height, material, nx=16, ny=2):
     return add_sail(name, fn, material, nx=nx, ny=ny)
 
 
+def add_jib(name, material, stay_low, stay_high, clew, luff_start=0.05, luff_end=0.75, billow=0.16, foot_arc=0.05, sheet_offset=0.05):
+    # Triangular headsail flying on a stay: the luff (head edge) lies along the
+    # stay line from tack to head, the foot runs tack -> clew, and the sheet
+    # fills between them — built the way a lateen is (same deformable grid).
+    # sheet_offset eases the free edges to starboard so crossing stays clear
+    # the canvas instead of grazing the leech.
+    low = Vector(stay_low)
+    high = Vector(stay_high)
+    tack = low.lerp(high, luff_start)
+    head = low.lerp(high, luff_end)
+    clew_v = Vector(clew)
+    foot_start = tack.lerp(clew_v, 0.04)
+
+    def fn(u, v):
+        luff = tack.lerp(head, u)
+        foot = foot_start.lerp(clew_v, u)
+        base = luff.lerp(foot, v)
+        bell = billow * math.sin(math.pi * u) * math.sin(math.pi * v * 0.72)
+        arc = foot_arc * math.sin(math.pi * u) * (v ** 2)
+        return (base.x + bell + sheet_offset * v, base.y + arc, base.z)
+
+    return add_sail(name, fn, material)
+
+
 def add_anchor_empty(name, loc, display_size=0.06):
     empty = bpy.data.objects.new(name, None)
     empty.empty_display_size = display_size

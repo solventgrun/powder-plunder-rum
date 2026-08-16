@@ -119,9 +119,13 @@ def create_hull(
     base_material="dark_wood",
     paint_material="red_paint",
     paint_from_row=5,
+    paint_to_row=None,
     bevel_width=0.035,
     bevel_segments=4,
 ):
+    # paint_to_row bounds the painted zone from above (exclusive), so a ship
+    # can wear a paint band with base wood returning on the bulwark. None keeps
+    # the galleon behavior: painted from paint_from_row to the sheer.
     stations = form.stations
     verts = []
     index = {}
@@ -142,7 +146,8 @@ def create_hull(
                 c = index[(side, si + 1, row + 1)]
                 d = index[(side, si, row + 1)]
                 faces.append((a, b, c, d) if side == 1 else (d, c, b, a))
-                mat_ids.append(0 if row < paint_from_row else 1)
+                paint_end = rows if paint_to_row is None else paint_to_row
+                mat_ids.append(1 if paint_from_row <= row < paint_end else 0)
 
     # Close bottom, bow, and stern so the transparent render reads as a solid object.
     for si in range(len(stations) - 1):

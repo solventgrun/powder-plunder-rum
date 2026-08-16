@@ -62,3 +62,69 @@ Work in `artifacts/blender_frigate/` (`create_frigate.py`, later `build_frigate_
 ## Definition of done
 
 Silhouette approved (F1) · zero unclassified objects · all six sails + rigging clear of collisions · GLB on contract · smoke test + content validation green · probes captured · user sign-off in playtest · this doc updated with a completion note · commits proposed (asset + integration split, like the galleon).
+
+## Session log
+
+### 2026-08-15 — F1–F7 build session
+
+- **Color scheme (F1 decision point):** the user supplied a "Vanguard-class"
+  frigate concept sheet mid-session that matches the brief's recommendation —
+  near-black hull, deep navy gun band edged in gold, restrained gold stern,
+  jib headsails, red masthead streamers. Built to that reference; sails stay
+  neutral canvas for the faction tint.
+- **F1:** station profile at the contract dims (stations z 2.45 → −2.75, max
+  half-width 0.85, mid deck 0.61 vs the galleon's 0.73; softer sheer and
+  gentler stern rake than the kit defaults). The quarterdeck is a raised
+  platform on a deliberately low hull sheer, with solid side bulwarks planted
+  on the hull skin so it reads integrated, not pasted on.
+- **F2:** shaped full-length deck, two hatches, single gun deck of 12 ports
+  per side at band center (t 0.64) with run-out muzzles, navy band bounded
+  rows 7–12 with gold strakes at its edges, three plank lines below, plain
+  rails with small gold caps, scroll billethead (no figurehead), one head rail
+  per side, breast bulkhead with side steps, navy transom with one row of
+  five gold-framed windows, taffrail + ensign staff. Ornament ≈ half the
+  galleon's: no rivets, no panel dividers, no galleries.
+- **F3:** three kit mast assemblies (fore 2.55 / main 2.95 / mizzen 2.45
+  above local deck, matching frigate_basic), fore+main course & topsail,
+  mizzen lateen (kit `lateen_half=0.92`), jib on the fore topmast stay via the
+  new kit `add_jib` (sheet_offset keeps the fore stay clear of the leech);
+  low-steeved bowsprit (~29°). Mizzen shrouds anchor forward of the mast —
+  the galleon's lesson — so nothing pierces the aft-raked lateen.
+- **F4:** three restrained streamers; `Anchor_Flag_Stern` on the ensign
+  staff, `Anchor_Flag_Main` at the main masthead, fire anchors at the exact
+  profile visual_states coordinates (0, 0.95, 0) / (0, 2.1, −0.05).
+- **F5:** `build_frigate_glb.py` mirrors the galleon build; GLB is exactly
+  40 nodes, root `Frigate`, same tree/names with Fore/Main/Mizzen keys, sails
+  carry only neutral canvas, materials flattened (no white-export regression),
+  `export_yup=False`.
+- **F6:** `FrigateVisual.tscn` wrapper + `frigate_basic` switched to
+  `mode: mesh`. Zero ShipVisualBuilder changes needed — the naming contract
+  held. Headless import, smoke test, and content validation all green.
+- **F7:** `player_ship.yaml` set to `ship_type: frigate` (left in place so
+  the playtest sails it — restore to galleon if preferred). Probes captured:
+  NavalBattle shows the frigate under pirate-tinted sails engaging the
+  galleon target (side-by-side consistency check); Overworld shows it
+  sailing. Smoke test re-run green with the frigate as player.
+- **Kit additions** (galleon defaults preserved, regression-gated):
+  `create_hull(paint_to_row=...)` for bounded paint bands,
+  `add_mast_assembly(lateen_half=...)`, `canvas.add_jib(...)`, and a review-rig
+  repair: Blender 5.2 renders the world's node Background, not the legacy
+  `world.color`, so `setup_review_scene` now sets both (the committed galleon
+  render set predates this and is internally mixed — dark backgrounds on the
+  stern/bow angles).
+- **Review-camera note:** the kit's `render_to` tracks camera-up toward world
+  Z, which rolls angled shots (visible in the committed galleon stern/bow
+  renders). The frigate generator uses a ship-side `render_level` for angled
+  shots instead; the kit function is untouched to keep the galleon
+  regression gate meaningful.
+- **Galleon regression gate: PASSED.** Same-environment comparison (the
+  committed render set is not a valid baseline on Blender 5.2 — see the
+  background note above): stashed the kit to HEAD, regenerated the galleon
+  with the review background pinned, restored the kit changes, regenerated
+  again, pixel-compared all six renders — bit-identical (max channel delta
+  0.0 across 19M subpixels per image; only PNG metadata differed).
+  `export.py` unchanged, so no galleon GLB rebuild was required.
+
+**Status: COMPLETE. User playtest sign-off received 2026-08-16 (battle-tested
+against varied opponents alongside the brig and galleon). All technical gates
+green. Commits pending (asset + integration split).**

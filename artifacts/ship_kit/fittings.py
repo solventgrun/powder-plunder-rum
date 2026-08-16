@@ -2,7 +2,7 @@
 from .primitives import add_cube, add_cylinder_between, add_ellipsoid, add_spar
 
 
-def add_mast_assembly(form, name, z, total_height, base_radius, materials, square_yards=(), lateen=False):
+def add_mast_assembly(form, name, z, total_height, base_radius, materials, square_yards=(), lateen=False, lateen_half=1.02):
     # Full mast: tapered lower mast rising from the deck partner, a round top
     # platform, an overlapping tapered topmast with a gold doubling band, and a
     # gold masthead finial. Square-rig masts get course/topsail yards across x;
@@ -53,7 +53,7 @@ def add_mast_assembly(form, name, z, total_height, base_radius, materials, squar
         # Raked lateen yard: forward-low to aft-high, crossing the mast a bit
         # above half height; the high end overhangs the stern.
         cross_y = deck_y + total_height * 0.55
-        half = 1.02
+        half = lateen_half
         dy = 0.67 * half
         dz = 0.74 * half
         add_spar(f"Yard_lateen_{name}", (0, cross_y - dy, z - dz), (0, cross_y + dy, z + dz), 0.027, 0.017, dark, 12)
