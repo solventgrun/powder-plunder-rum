@@ -801,6 +801,20 @@ The galleon is the only ship in the game with two levels of guns, and its broads
 
 Implementation home is `BroadsideController` (volley timing and muzzle positions are already per-side and count-aware); the rule should key off per-side carried gun count, not ship id, so any future two-decker inherits it.
 
+#### Faction Livery Kits (added 2026-08-17)
+
+**Goal (user directive):** every faction gets its own separate visual identity so you can tell *who* you're engaging from the vessel itself at combat distance — not only from the flag. Class stays readable from silhouette; faction reads from livery.
+
+What already exists is mechanism, not the goal: `ship-asset-pipeline.md` reserves faction identity for **material-slot recolors + runtime sail tint + procedural flags** (explicitly never per-faction meshes), sketches `faction_recolor: ["HullPaint", "Trim"]` in the visual-profile format, carries a "Faction distinction" review criterion, and milestone M7 holds a slot for proving the recolor axis. None of that states the requirement above — this entry does.
+
+**Design tension to resolve first:** today paint encodes *class*, not faction — each class brief deliberately assigned it a hull scheme (galleon burgundy+gold, frigate near-black+navy+gold, brig tarred brown+buff, sloop per its brief). A livery pass reassigns paint to faction and leaves class identity to silhouette alone; the current per-class palettes become the neutral/unaffiliated default (or one faction inherits them). Decide this with the user before building palettes.
+
+**Likely shape (data-driven, no model work per ADR 0010):** a per-faction livery kit = hull-paint + trim/accent palette applied to the GLB material slots by `ShipVisualBuilder`, plus the existing runtime sail tint and streamer color. Palettes live in `data/visuals/` beside `flags.yaml` so factions stay moddable in the data-driven spirit. Readability bar: name the faction at gameplay camera distance *before* the flag is legible; verify per the pipeline doc's "Faction distinction" criterion, one probe screenshot per faction per class.
+
+Pairs naturally with Multi-Ship Battle Readiness — knowing who is who matters most when several vessels share the screen.
+
+**Accepted framework (2026-08-17):** `docs/design/faction-visual-kit-proposal.md` — the five-layer kit structure (palette / stern / bow / deck dressing / sail treatment), per-nation visual languages, the flags-off recognition test, and this repo's phasing (palettes first at runtime, geometry via generator parameters only where recognition fails). The pirate conversion kit within it is deferred by user directive.
+
 ## Guiding Question for Agents
 
 When implementing a system, ask:

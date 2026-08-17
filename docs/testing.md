@@ -61,7 +61,7 @@ The debug panel shows wind heading, strength, and the current wind speed factor.
 
 ### Ship Visual Readability
 
-Faction flags are generated from [data/visuals/flags.yaml](../data/visuals/flags.yaml). The pirate faction should display a bold black Jolly Roger with a white skull-and-crossbones style mark. Flags billboard toward the battle camera and use chunky high-contrast generated textures so emblems remain readable at prototype camera distance.
+Faction flags are generated from [data/visuals/flags.yaml](../data/visuals/flags.yaml). The pirate faction should display a bold black Jolly Roger with a white skull-and-crossbones style mark. Flags stream downwind from their staff (aft on ships without a wind system), ripple with a traveling wave, and use chunky high-contrast generated textures so emblems remain readable at gameplay camera distance.
 
 Bow visuals are generated as forward-facing wedge meshes. If the bow flickers during combat, check for overlapping hull/bow faces or waterline clipping before changing camera or combat code.
 
