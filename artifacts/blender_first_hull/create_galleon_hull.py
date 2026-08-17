@@ -581,18 +581,25 @@ def decorate_hull(materials):
     add_bow_face_door("stern_deck_level_cabin_door", (0.0, 1.19, 1.61), (0.20, 0.32), materials)
     for col, x in enumerate([-0.30, 0.30]):
         add_bow_face_window(f"stern_deck_level_cabin_window_{col}", (x, 1.22, 1.61), (0.080, 0.15), materials)
-    for row, (y, xs, height) in enumerate([
-        (1.34, [-0.32, -0.16, 0.0, 0.16, 0.32], 0.18),
-        (1.86, [-0.24, -0.08, 0.08, 0.24], 0.20),
-        (2.18, [-0.22, -0.07, 0.07, 0.22], 0.20),
+    # Transom rebuilt 2026-08-17 (playtest: "windows appear to overlap with
+    # one another"): the old 13-window grid, two transom doors, and six raked
+    # columns all interpenetrated on the same face and read as a jammed
+    # mosaic. Now three clean rows of fewer, larger windows sized to each
+    # tier's taper, no transom doors (doors stay on the bow-facing walls),
+    # and per-tier vertical edge pilasters that frame the window bands
+    # instead of slicing through them.
+    for row, (y, xs, size) in enumerate([
+        (1.34, [-0.38, -0.19, 0.0, 0.19, 0.38], (0.105, 0.20)),
+        (1.84, [-0.31, -0.10, 0.10, 0.31], (0.100, 0.20)),
+        (2.20, [-0.18, 0.0, 0.18], (0.090, 0.16)),
     ]):
         for col, x in enumerate(xs):
-            add_rect_stern_window(f"stern_rect_window_{row}_{col}", (x, y, 2.64), (0.080, height), materials)
-    add_stern_door("stern_middle_gallery_door", (0.0, 1.62, 2.645), (0.13, 0.30), materials)
-    add_stern_door("stern_upper_gallery_door", (0.0, 2.00, 2.645), (0.12, 0.28), materials)
-    for x in [-0.48, -0.30, -0.10, 0.10, 0.30, 0.48]:
-        add_cylinder_between(f"stern_heavy_dark_gallery_column_{x}", (x, 1.12, 2.61), (x * 0.72, 2.42, 2.66), 0.020, dark, 12)
-        add_cylinder_between(f"stern_thin_gold_column_face_{x}", (x, 1.13, 2.65), (x * 0.72, 2.42, 2.70), 0.006, gold, 8)
+            add_rect_stern_window(f"stern_rect_window_{row}_{col}", (x, y, 2.64), size, materials)
+    for tier, (x_edge, y_bottom, y_top) in enumerate([(0.50, 1.20, 1.56), (0.42, 1.56, 2.02), (0.30, 2.02, 2.42)]):
+        for side in (-1, 1):
+            px = side * x_edge
+            add_cylinder_between(f"stern_edge_pilaster_{tier}_{side}", (px, y_bottom, 2.67), (px, y_top, 2.67), 0.020, dark, 12)
+            add_cylinder_between(f"stern_edge_pilaster_gold_face_{tier}_{side}", (px, y_bottom + 0.01, 2.70), (px, y_top - 0.01, 2.70), 0.006, gold, 8)
     for y, width in [(1.18, 1.10), (1.56, 1.08), (2.02, 0.90), (2.42, 0.72)]:
         add_cube(f"stern_horizontal_dark_gallery_beam_{y}", (0, y, 2.66), (width, 0.030, 0.050), dark, 0.007)
         add_cube(f"stern_horizontal_gold_gallery_face_{y}", (0, y + 0.020, 2.70), (width * 0.94, 0.010, 0.022), gold, 0.003)
