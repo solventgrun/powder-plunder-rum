@@ -3,9 +3,10 @@ class_name JamaicaIsland
 
 @export var land_color: Color = Color(0.13, 0.48, 0.22, 1.0)
 @export var shoreline_color: Color = Color(0.84, 0.72, 0.36, 1.0)
-# Must stay above the ocean's maximum wave crest (wave_height in
-# StylizedOceanMaterial.tres) or wave peaks rise through the land.
-@export var land_height: float = 0.75
+# Must stay above the ocean's maximum wave crest (wave_height plus both
+# swell amplitudes in StylizedOceanMaterial.tres, ~1.43) or wave peaks rise
+# through the land.
+@export var land_height: float = 1.6
 
 var outline: PackedVector2Array = PackedVector2Array([
 	Vector2(-82.0, -12.0),

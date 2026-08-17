@@ -64,7 +64,7 @@ allow_debug_wind_controls = false
 script = ExtResource("3_jamaica")
 
 [node name="PortRoyal" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0.95, 26)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 1.8, 26)
 
 [node name="TownMarker" type="MeshInstance3D" parent="PortRoyal"]
 mesh = SubResource("CylinderMesh_town")
