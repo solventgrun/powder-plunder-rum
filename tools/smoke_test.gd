@@ -366,8 +366,10 @@ func _test_main_scene_moves_ship(failures: Array[String]) -> void:
 		failures.append("Player generated visuals should include at least one visible flag node.")
 	else:
 		var player_flag := _get_child_with_prefix(player_visuals, "Flag_") as MeshInstance3D
-		if player_flag == null or player_flag.mesh.get_aabb().size.x < 1.0:
-			failures.append("Player flag should be large enough to read from the battle camera.")
+		# Right-sized policy: profile size x1.3 (skull floor 0.6 x profile
+		# scale) — readable at the battle camera without dwarfing the hull.
+		if player_flag == null or player_flag.mesh.get_aabb().size.x < 0.55 or player_flag.mesh.get_aabb().size.x > 1.1:
+			failures.append("Player flag should be right-sized: readable without dwarfing the mesh hull.")
 		elif player_flag.material_override == null or player_flag.material_override.get("albedo_texture") == null:
 			failures.append("Player flag should use a generated emblem texture.")
 		elif not _mesh_has_uvs(player_flag.mesh):
@@ -698,24 +700,46 @@ func _test_asymmetric_ship_loadout(failures: Array[String]) -> void:
 	if starboard_cannons.size() != expected_starboard.size():
 		failures.append("Starboard carried cannon count should match player_ship.yaml. Found %d expected %d." % [starboard_cannons.size(), expected_starboard.size()])
 
+	var live_port_weight: float = broadside.call("_get_side_weight", -1)
+	var live_starboard_weight: float = broadside.call("_get_side_weight", 1)
+	var total_weight: float = broadside.call("get_total_cannon_weight")
+	if not is_equal_approx(total_weight, live_port_weight + live_starboard_weight):
+		failures.append("Total cannon weight should equal port plus starboard cannon weight.")
+
+	# Asymmetry math runs on an injected fixture, NOT the live player file:
+	# player_ship.yaml is the player's own loadout (they edit it while playing,
+	# 2026-08-17) and any symmetric loadout would fail these by construction.
+	var original_loadout: Variant = broadside.get("ship_loadout")
+	broadside.set("ship_loadout", {
+		"broadsides": {
+			"port": {"cannons": [
+				"light_4_pounder",
+				"light_4_pounder",
+				"light_4_pounder",
+				"light_4_pounder",
+			]},
+			"starboard": {"cannons": [
+				"long_9_pounder",
+				"long_9_pounder",
+				"long_9_pounder",
+			]}
+		}
+	})
 	var port_range: float = broadside.call("_get_side_max_range", -1)
 	var starboard_range: float = broadside.call("_get_side_max_range", 1)
 	if not starboard_range > port_range:
-		failures.append("Starboard mixed long-cannon loadout should outrange port.")
+		failures.append("Starboard mixed long-cannon fixture should outrange port.")
 
 	var port_reload: float = broadside.call("_get_side_reload_time", -1)
 	var starboard_reload: float = broadside.call("_get_side_reload_time", 1)
 	if not starboard_reload > port_reload:
-		failures.append("Starboard mixed long-cannon loadout should reload slower than port.")
+		failures.append("Starboard mixed long-cannon fixture should reload slower than port.")
 
 	var port_weight: float = broadside.call("_get_side_weight", -1)
 	var starboard_weight: float = broadside.call("_get_side_weight", 1)
 	if not starboard_weight > port_weight:
-		failures.append("Starboard mixed long-cannon loadout should weigh more than port.")
-
-	var total_weight: float = broadside.call("get_total_cannon_weight")
-	if not is_equal_approx(total_weight, port_weight + starboard_weight):
-		failures.append("Total cannon weight should equal port plus starboard cannon weight.")
+		failures.append("Starboard mixed long-cannon fixture should weigh more than port.")
+	broadside.set("ship_loadout", original_loadout)
 
 	var sloop_stats: Resource = ContentCatalog.build_ship_stats({
 		"ship_type": "sloop",

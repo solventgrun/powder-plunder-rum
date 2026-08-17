@@ -1,5 +1,5 @@
 player_ship:
-  ship_type: sloop
+  ship_type: frigate
   faction: pirates
   visual_variant: worn
   sail_set: full
@@ -9,12 +9,27 @@ player_ship:
   broadsides:
     port:
       cannons:
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
-        - light_4_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
     starboard:
       cannons:
-        - long_9_pounder
-        - long_9_pounder
-        - long_9_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
+        - long_12_pounder
