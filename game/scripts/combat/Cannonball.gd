@@ -81,9 +81,11 @@ func _hit_body(body: Node) -> void:
 	if body.has_method("apply_projectile_hit"):
 		body.call("apply_projectile_hit", damage, status_effects, _get_ammo_context(), global_position)
 		_spawn_impact()
+		FollowCamera.add_trauma_for_ship_hit(self, body, 0.85)
 	elif body.has_method("apply_hull_damage"):
 		body.call("apply_hull_damage", damage)
 		_spawn_impact()
+		FollowCamera.add_trauma_for_ship_hit(self, body, 0.85)
 		if body.has_method("apply_status_effects"):
 			body.call("apply_status_effects", status_effects)
 	_release_smoke_trail()

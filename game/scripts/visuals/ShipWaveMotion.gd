@@ -23,6 +23,12 @@ class_name ShipWaveMotion
 # Broadside recoil kick, decaying back to zero between volleys.
 @export_range(0.0, 8.0, 0.1, "degrees") var recoil_roll_degrees: float = 2.2
 @export_range(1.0, 12.0, 0.1) var recoil_decay: float = 5.0
+# Damage listing: the fourth roll source — a slow wounded lean (port rail
+# down, slightly by the head) driven by ShipVisualBuilder as hull fraction
+# drops. Replaces the old translucent damage-overlay box.
+@export_range(0.0, 15.0, 0.5, "degrees") var max_list_roll_degrees: float = 9.5
+@export_range(0.0, 8.0, 0.25, "degrees") var max_list_pitch_degrees: float = 3.2
+@export_range(0.1, 5.0, 0.1) var list_response: float = 0.8
 
 var wave_field: Node
 var ship: Node3D
@@ -30,6 +36,9 @@ var previous_yaw: float = 0.0
 var yaw_rate_degrees: float = 0.0
 var heel_radians: float = 0.0
 var recoil_roll: float = 0.0
+var list_severity: float = 0.0
+var list_roll: float = 0.0
+var list_pitch: float = 0.0
 
 
 # Broadside kick: the deck rolls away from the firing side, then eases back.
@@ -37,6 +46,11 @@ var recoil_roll: float = 0.0
 func add_recoil_roll(side: int) -> void:
 	var kick := deg_to_rad(recoil_roll_degrees)
 	recoil_roll = clampf(recoil_roll + kick * float(side), -kick * 2.0, kick * 2.0)
+
+
+# severity 0 = sound hull, 1 = full wounded lean at zero hull.
+func set_damage_list(severity: float) -> void:
+	list_severity = clampf(severity, 0.0, 1.0)
 
 
 func _ready() -> void:
@@ -72,16 +86,21 @@ func _process(delta: float) -> void:
 	# world-space offset instead of growing with the ship.
 	var world_scale: float = maxf(ship.global_transform.basis.get_scale().y, 0.001)
 	position.y = (bow_height + stern_height) * 0.5 * bob_amount / world_scale
+	# The list eases in slowly — a ship settling as it takes on water, not a
+	# snap on the damaging hit.
+	var list_blend := 1.0 - exp(-list_response * delta)
+	list_roll = lerpf(list_roll, deg_to_rad(max_list_roll_degrees) * list_severity, list_blend)
+	list_pitch = lerpf(list_pitch, -deg_to_rad(max_list_pitch_degrees) * list_severity, list_blend)
 	var pitch_span := Vector2(bow_world.x - stern_world.x, bow_world.z - stern_world.z).length()
 	if pitch_span > 0.01:
-		rotation.x = atan2(bow_height - stern_height, pitch_span) * pitch_amount
+		rotation.x = atan2(bow_height - stern_height, pitch_span) * pitch_amount + list_pitch
 	_update_heel(delta)
 	recoil_roll *= exp(-recoil_decay * delta)
 	var wave_roll := 0.0
 	var roll_span := Vector2(starboard_world.x - port_world.x, starboard_world.z - port_world.z).length()
 	if roll_span > 0.01:
 		wave_roll = atan2(starboard_height - port_height, roll_span) * roll_amount
-	rotation.z = wave_roll + heel_radians + recoil_roll
+	rotation.z = wave_roll + heel_radians + recoil_roll + list_roll
 
 
 func _update_heel(delta: float) -> void:

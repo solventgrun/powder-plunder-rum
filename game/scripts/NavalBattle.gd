@@ -3,7 +3,9 @@ class_name NavalBattle
 
 @export var player_ship_path: NodePath
 @export var target_ship_path: NodePath
-@export var result_delay: float = 2.0
+# Long enough for the 3.2s sinking settle (ShipCombatComponent.sink_duration)
+# to finish on screen before the battle hands back to the overworld.
+@export var result_delay: float = 5.0
 @export var auto_return_to_overworld: bool = true
 
 var player_ship: Node

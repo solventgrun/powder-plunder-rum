@@ -160,6 +160,10 @@ func _fire_side(side: int) -> bool:
 		var visual_root := parent_3d.get_node_or_null("VisualRoot")
 		if visual_root and visual_root.has_method("add_recoil_roll"):
 			visual_root.call("add_recoil_roll", side)
+		# Recoil kick only for the ship the camera rides: distance falloff ate
+		# most of the old add_trauma_at amount, so the player's own broadside
+		# barely registered (2026-08-17 playtest).
+		FollowCamera.add_trauma_for_ship_hit(self, parent_3d, 0.4)
 
 		var boom_player := get_node_or_null("CannonBoomPlayer")
 		if boom_player and boom_player.has_method("play_boom"):

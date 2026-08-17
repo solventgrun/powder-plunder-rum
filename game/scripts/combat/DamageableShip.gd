@@ -2,7 +2,6 @@ extends StaticBody3D
 class_name DamageableShip
 
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
-const BurningFlameScene := preload("res://game/scenes/BurningFlame.tscn")
 const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tscn")
 const NON_BURNING_DIRECT_MAGAZINE_EXPLOSION_MULTIPLIER := 0.25
 
@@ -37,7 +36,6 @@ var ship_stats: Resource
 var disabled_cannons := {"port": 0, "starboard": 0}
 var disabled_gun_ports := {"port": 0, "starboard": 0}
 
-var flame_visual: Node3D
 @onready var ship_visuals: Node = $ShipVisualBuilder
 
 
@@ -88,6 +86,8 @@ func apply_sail_damage(amount: float) -> void:
 	if is_sunk:
 		return
 	sail = maxf(0.0, sail - amount)
+	if ship_visuals and ship_visuals.has_method("set_sail_fraction"):
+		ship_visuals.call("set_sail_fraction", get_sail_fraction())
 
 
 func apply_crew_damage(amount: float) -> void:
@@ -186,13 +186,7 @@ func _apply_burning(severity: String) -> void:
 	burning_hull_damage_per_second = float(level.get("hull_damage_per_second", 1.0))
 	burning_growth_chance_per_second = float(level.get("growth_chance_per_second", 0.0))
 	burning_magazine_explosion_chance_per_second = float(level.get("magazine_explosion_chance_per_second", 0.0))
-	if flame_visual == null:
-		flame_visual = BurningFlameScene.instantiate() as Node3D
-		if flame_visual:
-			add_child(flame_visual)
-			flame_visual.position = ship_visuals.get_fire_socket_position("deck_fire_main", Vector3(0.0, 0.45, 0.0)) if ship_visuals else Vector3(0.0, 0.45, 0.0)
-	if flame_visual:
-		flame_visual.scale = Vector3.ONE * float(level.get("visual_scale", 1.0))
+	# Fire visuals live in ShipVisualBuilder.set_fire_state (Tier 3).
 	if ship_visuals:
 		ship_visuals.set_fire_state(true, burning_severity)
 
@@ -206,9 +200,6 @@ func _stop_burning() -> void:
 	burning_magazine_explosion_chance_per_second = 0.0
 	burning_explosion_tick = 0.0
 	burning_growth_tick = 0.0
-	if flame_visual:
-		flame_visual.queue_free()
-		flame_visual = null
 	if ship_visuals:
 		ship_visuals.set_fire_state(false, "")
 

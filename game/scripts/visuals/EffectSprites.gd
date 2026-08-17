@@ -6,6 +6,7 @@ extends RefCounted
 
 static var _puff: ImageTexture
 static var _ring: ImageTexture
+static var _tatter: ImageTexture
 
 
 # Soft radial falloff disc; without it billboard quads show square corners.
@@ -23,6 +24,29 @@ static func puff_texture() -> ImageTexture:
 			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
 	_puff = ImageTexture.create_from_image(image)
 	return _puff
+
+
+# Seamless cellular-noise alpha field for sail canvas. Cell centers sit at
+# alpha ~0, so a rising alpha-scissor threshold eats round-ish shot holes
+# that grow and merge — progressive chain-shot damage without a UV layout
+# (the material samples it triplanar in world space).
+static func canvas_tatter_texture() -> ImageTexture:
+	if _tatter:
+		return _tatter
+	var noise := FastNoiseLite.new()
+	noise.seed = 71
+	noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE
+	noise.frequency = 0.09
+	noise.fractal_octaves = 2
+	var size := 128
+	var field := noise.get_seamless_image(size, size)
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for y in range(size):
+		for x in range(size):
+			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, field.get_pixel(x, y).r))
+	_tatter = ImageTexture.create_from_image(image)
+	return _tatter
 
 
 # Soft ring band, for expanding foam rings laid flat on the water.

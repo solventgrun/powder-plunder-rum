@@ -40,8 +40,8 @@ func _ready() -> void:
 	if ship_visuals:
 		ship_visuals.apply_visuals(ship_loadout, ship_stats)
 	if combat:
-		combat.sunk_drop = 0.55
-		combat.sunk_roll_degrees = 11.0
+		combat.sunk_drop = 1.2
+		combat.sunk_roll_degrees = 18.0
 		combat.configure(ship_stats, ship_loadout, ship_visuals, ship_display_name)
 	if broadside_controller:
 		broadside_controller.set("ship_config", "target")

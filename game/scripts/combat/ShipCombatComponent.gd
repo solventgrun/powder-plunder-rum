@@ -2,7 +2,6 @@ extends Node
 class_name ShipCombatComponent
 
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
-const BurningFlameScene := preload("res://game/scenes/BurningFlame.tscn")
 const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tscn")
 
 const NON_BURNING_DIRECT_MAGAZINE_EXPLOSION_MULTIPLIER := 0.25
@@ -35,11 +34,12 @@ var ship_loadout: Dictionary = {}
 var ship_stats: Resource
 var disabled_cannons := {"port": 0, "starboard": 0}
 var disabled_gun_ports := {"port": 0, "starboard": 0}
-var flame_visual: Node3D
 var visual_node: Node
 var display_name: String = "Ship"
-var sunk_drop: float = 0.5
-var sunk_roll_degrees: float = 9.0
+var sunk_drop: float = 1.1
+var sunk_roll_degrees: float = 16.0
+var sunk_pitch_degrees: float = -4.0
+var sink_duration: float = 3.2
 
 
 func configure(stats: Resource, loadout: Dictionary, visuals: Node, name_override: String = "") -> void:
@@ -115,6 +115,8 @@ func apply_sail_damage(amount: float) -> void:
 	if is_sunk:
 		return
 	sail = maxf(0.0, sail - amount)
+	if visual_node and visual_node.has_method("set_sail_fraction"):
+		visual_node.call("set_sail_fraction", get_sail_fraction())
 	if sail <= 0.0 and not is_mast_broken:
 		break_mast()
 
@@ -214,17 +216,9 @@ func _apply_burning(severity: String) -> void:
 	burning_hull_damage_per_second = float(level.get("hull_damage_per_second", 1.0))
 	burning_growth_chance_per_second = float(level.get("growth_chance_per_second", 0.0))
 	burning_magazine_explosion_chance_per_second = float(level.get("magazine_explosion_chance_per_second", 0.0))
-	if flame_visual == null:
-		var owner_3d := get_parent() as Node3D
-		flame_visual = BurningFlameScene.instantiate() as Node3D
-		if owner_3d and flame_visual:
-			var flame_anchor := owner_3d.get_node_or_null("VisualRoot") as Node3D
-			if flame_anchor == null:
-				flame_anchor = owner_3d
-			flame_anchor.add_child(flame_visual)
-			flame_visual.position = visual_node.call("get_fire_socket_position", "deck_fire_main", Vector3(0.0, 0.65, 0.0)) if visual_node else Vector3(0.0, 0.65, 0.0)
-	if flame_visual:
-		flame_visual.scale = Vector3.ONE * float(level.get("visual_scale", 1.0))
+	# Fire visuals live in ShipVisualBuilder.set_fire_state (severity-scaled
+	# flames/embers/smoke at the fire sockets, Tier 3); the old emissive
+	# sphere spawn is gone.
 	if visual_node:
 		visual_node.call("set_fire_state", true, burning_severity)
 
@@ -238,9 +232,6 @@ func _stop_burning() -> void:
 	burning_magazine_explosion_chance_per_second = 0.0
 	burning_explosion_tick = 0.0
 	burning_growth_tick = 0.0
-	if flame_visual:
-		flame_visual.queue_free()
-		flame_visual = null
 	if visual_node:
 		visual_node.call("set_fire_state", false, "")
 
@@ -252,15 +243,34 @@ func _sink() -> void:
 	if owner_3d:
 		if owner_3d is CharacterBody3D:
 			(owner_3d as CharacterBody3D).velocity = Vector3.ZERO
-		owner_3d.position.y -= sunk_drop
-		owner_3d.rotation_degrees.z = sunk_roll_degrees
 		var collision := owner_3d.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if collision:
 			collision.set_deferred("disabled", true)
+		# The settle is the payoff moment (Tier 3): the old snap becomes an
+		# ease-in drop — water claiming the hull — while the wreck rolls to
+		# port and goes down by the head. is_sunk stays immediate; only the
+		# body transform animates. NavalBattle.result_delay gives it room.
+		var tween := owner_3d.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(owner_3d, "position:y", owner_3d.position.y - sunk_drop, sink_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tween.tween_property(owner_3d, "rotation_degrees:z", sunk_roll_degrees, sink_duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(owner_3d, "rotation_degrees:x", sunk_pitch_degrees, sink_duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_spawn_sink_foam(owner_3d)
 	if visual_node:
 		visual_node.call("set_damage_fraction", 0.0)
 	print("%s disabled." % display_name)
 	sunk.emit()
+
+
+# Churned foam pulses spreading from the hull as it settles under.
+func _spawn_sink_foam(owner_3d: Node3D) -> void:
+	var spawn_parent := _get_effect_spawn_parent()
+	if spawn_parent == null:
+		return
+	var at := owner_3d.global_position
+	FoamRingEffect.spawn(spawn_parent, at, 1.2, 6.5, 1.6, 0.0, 0.7)
+	FoamRingEffect.spawn(spawn_parent, at, 0.8, 8.5, 2.2, 1.1, 0.42)
+	FoamRingEffect.spawn(spawn_parent, at, 0.6, 9.5, 2.6, 2.2, 0.3)
 
 
 func _roll_armament_damage(side: int, ammo_context: Dictionary) -> void:

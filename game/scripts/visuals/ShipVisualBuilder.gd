@@ -21,27 +21,120 @@ const SAIL_PALETTES := {
 	"pirate_canvas": Color(0.64, 0.55, 0.42, 1.0)
 }
 
+# Flags honor the profile-authored sizes with a modest readability bump; the
+# old x1.9 inflation plus global minimums were tuned for featureless
+# procedural boxes and dwarfed the mesh fleet. The skull keeps a legibility
+# floor that scales with the ship instead of one global minimum.
+const FLAG_SIZE_MULTIPLIER := 1.3
+const FLAG_SKULL_MIN_WIDTH := 0.6  # x profile scale
+const FLAG_WAVE_COUNT := 1.3  # wavelengths along the fly
+const FLAG_WAVE_SPEED := 8.0  # radians per flag-second
+const FLAG_RIPPLE_DEPTH := 0.12  # z swing at the fly tip, x flag width
+const FLAG_FLAP_DEPTH := 0.06  # y flap at the fly tip, x flag height
+
+# Chain-shot damage reads on the canvas itself: an alpha-scissor threshold
+# rising with tatter eats shot holes through the sail texture. The old
+# height-only shrink was invisible at gameplay distance (2026-08-16 playtest).
+const SAIL_TATTER_MAX_CUT := 0.72  # alpha-scissor threshold at zero sail
+# Cut fraction over tatter, piecewise linear. Hole area grows ~quadratically
+# with the cut, so the curve rises fast early (first volleys punch visible
+# pockmarks), nearly plateaus through the middle (a 60%-damaged sail reads
+# holed, not destroyed — 2026-08-17 playtest), then surges to full shred.
+const SAIL_TATTER_CURVE: Array[Vector2] = [
+	Vector2(0.0, 0.0),
+	Vector2(0.25, 0.5),
+	Vector2(0.6, 0.62),
+	Vector2(0.85, 0.8),
+	Vector2(1.0, 1.0),
+]
+const SAIL_SCORCH := Color(0.36, 0.31, 0.26, 1.0)
+
+# Mast break: the GLB mast assemblies pivot at their deck feet, so the whole
+# rig — spars, yards, canvas, rigging — topples overboard per assembly.
+const MAST_ASSEMBLY_NAMES := ["ForemastAssembly", "MainmastAssembly", "MizzenAssembly"]
+const MAST_FALL_SECONDS := 1.15
+const MAST_FALL_STAGGER := 0.45
+const MAST_FALL_ROLL_DEGREES := 78.0
+const MAST_FALL_PITCH_DEGREES := 14.0
+
 var generated_root: Node3D
 var model_visual: Node3D
 var sail_nodes: Array[Node3D] = []
+var sail_canvas_materials: Array[StandardMaterial3D] = []
+var sail_base_color: Color = Color.WHITE
+var masts_toppled := false
+var mast_fall_tweens: Array[Tween] = []
 var flag_nodes: Array[Node3D] = []
-var flag_billboard_nodes: Array[Node3D] = []
 var damage_overlay: MeshInstance3D
 var fire_socket_positions: Dictionary = {}
 var current_profile: Dictionary = {}
+var flag_time: float = 0.0
+var flag_wind_system: Node
+var searched_flag_wind := false
+var fire_root: Node3D
+var fire_flames: Array[MeshInstance3D] = []
+var fire_time: float = 0.0
 
 
-func _process(_delta: float) -> void:
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
+func _process(delta: float) -> void:
+	_animate_fire(delta)
+	if flag_nodes.is_empty():
 		return
-	for flag in flag_billboard_nodes:
-		if flag == null:
+	var wind := _resolve_flag_wind_system()
+	var wind_factor := 1.0
+	var stream_direction := Vector3.ZERO
+	if wind != null:
+		stream_direction = wind.get_wind_direction()
+		if wind.has_method("get_wind_speed_factor"):
+			wind_factor = clampf(float(wind.call("get_wind_speed_factor")), 0.0, 1.6)
+	# Flutter pace follows wind strength; windless ships still stir gently.
+	flag_time += delta * (0.55 + 0.45 * wind_factor)
+	for flag in flag_nodes:
+		if not is_instance_valid(flag):
 			continue
-		var direction := camera.global_position - flag.global_position
-		if direction.length_squared() <= 0.001:
+		if stream_direction.length_squared() > 0.0001:
+			var parent := flag.get_parent() as Node3D
+			var local_direction: Vector3 = parent.global_transform.basis.inverse() * stream_direction
+			local_direction.y = 0.0
+			if local_direction.length_squared() > 0.0001:
+				# The flag's local +X is the fly direction; yaw it downwind
+				# around the staff. Roll/pitch inherit from the hull like a
+				# real staff-mounted ensign.
+				var target_yaw := atan2(-local_direction.z, local_direction.x)
+				flag.rotation.y = lerp_angle(flag.rotation.y, target_yaw, 1.0 - exp(-5.0 * delta))
+		_apply_flag_ripple(flag)
+
+
+# Flame quads breathe on two beat frequencies so the fire never loops
+# visibly; taller pulse than wide reads as licking flame.
+func _animate_fire(delta: float) -> void:
+	if fire_flames.is_empty():
+		return
+	fire_time += delta
+	for flame in fire_flames:
+		if not is_instance_valid(flame):
 			continue
-		flag.look_at(camera.global_position, Vector3.UP)
+		var phase: float = flame.get_meta("flame_phase", 0.0)
+		var breadth := 1.0 + 0.14 * sin(fire_time * 11.0 + phase)
+		var height := 1.0 + 0.26 * sin(fire_time * 17.0 + phase * 1.7)
+		flame.scale = Vector3(breadth, height, 1.0)
+
+
+# Battle ships and the overworld player expose a wind_system property;
+# overworld NPCs carry none and keep their aft-streaming default, the same
+# graceful degradation wind-heel uses.
+func _resolve_flag_wind_system() -> Node:
+	if searched_flag_wind:
+		return flag_wind_system
+	searched_flag_wind = true
+	var node: Node = get_parent()
+	while node != null:
+		var candidate: Variant = node.get("wind_system")
+		if candidate is Node:
+			flag_wind_system = candidate
+			break
+		node = node.get_parent()
+	return flag_wind_system
 
 
 func apply_visuals(ship_record: Dictionary, stats: Resource) -> void:
@@ -69,6 +162,7 @@ func apply_visuals(ship_record: Dictionary, stats: Resource) -> void:
 	var faction: Dictionary = factions.get(faction_id, factions.get("pirates", {}))
 	var flag: Dictionary = flags.get(str(faction.get("flag", "jolly_roger")), flags.get("jolly_roger", {}))
 	var sail_color := _sail_color(str(faction.get("sail_palette", "naval_canvas")), str(ship_record.get("visual_variant", "")))
+	sail_base_color = sail_color
 
 	var hull_config: Dictionary = current_profile.get("hull", {})
 	if str(hull_config.get("mode", "procedural")) == "mesh" and _apply_mesh_visual(hull_config, sail_color):
@@ -95,11 +189,21 @@ func update_sail_trim(trim: float) -> void:
 
 
 func set_damage_fraction(hull_fraction: float) -> void:
-	if damage_overlay == null:
-		return
 	var states: Dictionary = current_profile.get("visual_states", {})
 	var light_threshold := float(states.get("light_damage_threshold", 0.7))
 	var heavy_threshold := float(states.get("heavy_damage_threshold", 0.35))
+	# Progressive listing replaces the translucent overlay box (which wrapped
+	# visibly around mesh hulls): ramps from the light-damage threshold to a
+	# full wounded lean at zero hull, composed by ShipWaveMotion on VisualRoot.
+	var severity := 0.0
+	if light_threshold > 0.001:
+		severity = clampf((light_threshold - hull_fraction) / light_threshold, 0.0, 1.0)
+	var motion := get_parent()
+	if motion and motion.has_method("set_damage_list"):
+		motion.call("set_damage_list", severity)
+	if damage_overlay == null:
+		return
+	# Procedural-fallback ships keep the old overlay cue.
 	if hull_fraction <= heavy_threshold:
 		damage_overlay.visible = true
 		damage_overlay.scale = Vector3(1.04, 1.05, 1.04)
@@ -116,20 +220,302 @@ func get_fire_socket_position(socket_id: String, fallback: Vector3 = Vector3.ZER
 	return fire_socket_positions.get(socket_id, fallback)
 
 
-func set_fire_state(_is_burning: bool, _severity: String) -> void:
-	pass
+# Severity-scaled shipboard fire at the fire sockets: flickering flame
+# billboards, rising embers, and a leaning black smoke column. Severities
+# come from the fire levels (ADR 0007): small / medium / large; large also
+# ignites the rigging at the sail socket.
+const FIRE_INTENSITIES := {"small": 0.6, "medium": 1.0, "large": 1.45}
 
 
-func set_mast_broken(is_broken: bool) -> void:
+func set_fire_state(is_burning: bool, severity: String) -> void:
+	if not is_burning:
+		if fire_root:
+			fire_root.queue_free()
+			fire_root = null
+			fire_flames.clear()
+		return
+	if fire_root == null:
+		_build_fire_visual()
+	var intensity: float = FIRE_INTENSITIES.get(severity, 1.0)
+	for cluster_name in ["DeckFire", "SailFire"]:
+		var cluster := fire_root.get_node_or_null(cluster_name) as Node3D
+		if cluster == null:
+			continue
+		cluster.scale = Vector3.ONE * intensity
+		if cluster_name == "SailFire":
+			cluster.visible = severity == "large"
+		for child in cluster.get_children():
+			if child is GPUParticles3D:
+				child.amount_ratio = clampf(0.45 + 0.4 * intensity, 0.0, 1.0)
+
+
+func _build_fire_visual() -> void:
+	fire_root = Node3D.new()
+	fire_root.name = "FireVisual"
+	add_child(fire_root)
+	_build_fire_cluster("DeckFire", get_fire_socket_position("deck_fire_main", Vector3(0.0, 0.65, 0.0)), true)
+	_build_fire_cluster("SailFire", get_fire_socket_position("sail_fire_main", Vector3(0.0, 1.6, 0.0)), false)
+
+
+func _build_fire_cluster(cluster_name: String, cluster_position: Vector3, with_smoke: bool) -> void:
+	var cluster := Node3D.new()
+	cluster.name = cluster_name
+	cluster.position = cluster_position
+	fire_root.add_child(cluster)
+	_add_flame_quad(cluster, Vector2(0.95, 1.4), Color(1.0, 0.42, 0.06, 0.95), Vector3(0.0, 0.5, 0.0))
+	_add_flame_quad(cluster, Vector2(0.5, 0.8), Color(1.0, 0.85, 0.32, 0.95), Vector3(0.05, 0.38, 0.05))
+	cluster.add_child(_make_ember_particles())
+	if with_smoke:
+		cluster.add_child(_make_fire_smoke_particles())
+
+
+func _add_flame_quad(cluster: Node3D, size: Vector2, color: Color, at: Vector3) -> void:
+	var flame := MeshInstance3D.new()
+	flame.name = "Flame"
+	var quad := QuadMesh.new()
+	quad.size = size
+	flame.mesh = quad
+	flame.position = at
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.albedo_color = color
+	material.albedo_texture = EffectSprites.puff_texture()
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.billboard_keep_scale = true
+	flame.material_override = material
+	flame.set_meta("flame_phase", float(fire_flames.size()) * 1.9)
+	cluster.add_child(flame)
+	fire_flames.append(flame)
+
+
+func _make_ember_particles() -> GPUParticles3D:
+	var embers := GPUParticles3D.new()
+	embers.name = "Embers"
+	embers.amount = 22
+	embers.lifetime = 0.9
+	embers.local_coords = false
+	embers.visibility_aabb = AABB(Vector3(-3.0, -1.0, -3.0), Vector3(6.0, 8.0, 6.0))
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3(0.0, 1.0, 0.0)
+	process.spread = 24.0
+	process.initial_velocity_min = 1.2
+	process.initial_velocity_max = 2.4
+	process.gravity = Vector3(0.0, 0.6, 0.0)
+	process.scale_min = 0.35
+	process.scale_max = 0.7
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1.0, 0.78, 0.3, 0.95))
+	ramp.set_color(1, Color(0.9, 0.2, 0.05, 0.0))
+	var ramp_texture := GradientTexture1D.new()
+	ramp_texture.gradient = ramp
+	process.color_ramp = ramp_texture
+	embers.process_material = process
+	var pass_mesh := QuadMesh.new()
+	pass_mesh.size = Vector2(0.09, 0.09)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.vertex_color_use_as_albedo = true
+	material.albedo_texture = EffectSprites.puff_texture()
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	pass_mesh.material = material
+	embers.draw_pass_1 = pass_mesh
+	return embers
+
+
+func _make_fire_smoke_particles() -> GPUParticles3D:
+	var smoke := GPUParticles3D.new()
+	smoke.name = "FireSmoke"
+	smoke.amount = 46
+	smoke.lifetime = 3.2
+	smoke.local_coords = false
+	smoke.visibility_aabb = AABB(Vector3(-5.0, -1.0, -5.0), Vector3(10.0, 14.0, 10.0))
+	var process := ParticleProcessMaterial.new()
+	# Canted column: hot smoke leans off vertical so the fire reads at
+	# gameplay distance instead of hiding behind the sails.
+	process.direction = Vector3(0.4, 1.0, 0.12)
+	process.spread = 10.0
+	process.initial_velocity_min = 1.3
+	process.initial_velocity_max = 2.0
+	process.gravity = Vector3(0.0, 0.5, 0.0)
+	process.scale_min = 1.0
+	process.scale_max = 2.2
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.09, 0.08, 0.07, 0.85))
+	ramp.set_color(1, Color(0.16, 0.15, 0.14, 0.0))
+	var ramp_texture := GradientTexture1D.new()
+	ramp_texture.gradient = ramp
+	process.color_ramp = ramp_texture
+	smoke.process_material = process
+	var pass_mesh := QuadMesh.new()
+	pass_mesh.size = Vector2(1.1, 1.1)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.vertex_color_use_as_albedo = true
+	material.albedo_texture = EffectSprites.puff_texture()
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	pass_mesh.material = material
+	smoke.draw_pass_1 = pass_mesh
+	return smoke
+
+
+# Chain shot reads on the canvas: the alpha-scissor cut rises with tatter and
+# eats growing shot holes through the cloth, backed by scorch darkening and a
+# modest shrink toward the yards. Height-only scale so trim's width animation
+# composes.
+func set_sail_fraction(sail_fraction: float) -> void:
+	var tatter := 1.0 - clampf(sail_fraction, 0.0, 1.0)
 	for sail in sail_nodes:
-		sail.visible = not is_broken
+		sail.scale.y = lerpf(1.0, 0.7, tatter)
+	var cut_fraction := _tatter_cut_fraction(tatter)
+	for material in sail_canvas_materials:
+		material.alpha_scissor_threshold = SAIL_TATTER_MAX_CUT * cut_fraction
+		material.albedo_color = sail_base_color.lerp(SAIL_SCORCH, cut_fraction * 0.5)
+
+
+static func _tatter_cut_fraction(tatter: float) -> float:
+	var t := clampf(tatter, 0.0, 1.0)
+	for index in range(1, SAIL_TATTER_CURVE.size()):
+		var segment_end := SAIL_TATTER_CURVE[index]
+		if t <= segment_end.x:
+			var segment_start := SAIL_TATTER_CURVE[index - 1]
+			var span := maxf(segment_end.x - segment_start.x, 0.0001)
+			return lerpf(segment_start.y, segment_end.y, (t - segment_start.x) / span)
+	return 1.0
+
+
+# Sail canvas with the shared tatter noise in its alpha channel. At threshold
+# zero every texel survives, so an undamaged sail renders exactly as before;
+# set_sail_fraction raises the cut. Triplanar so the flattened model sails
+# need no UV layout, two-sided so holes read from both faces of the canvas.
+func _make_sail_canvas_material(sail_color: Color) -> StandardMaterial3D:
+	var material := _standard_material(sail_color, 0.9, true)
+	material.albedo_texture = EffectSprites.canvas_tatter_texture()
+	material.uv1_triplanar = true
+	material.uv1_scale = Vector3(2.2, 2.2, 2.2)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	material.alpha_scissor_threshold = 0.0
+	sail_canvas_materials.append(material)
+	return material
+
+
+# The masts actually come down (2026-08-16 playtest): each mast assembly
+# topples overboard around its deck-foot pivot in a staggered accelerating
+# fall, alternating sides, with foam where the masthead strikes the water.
+# Procedural-fallback ships keep the old cue (sails vanish; the combat
+# component lays the box mast over).
+func set_mast_broken(is_broken: bool) -> void:
+	if model_visual == null:
+		for sail in sail_nodes:
+			sail.visible = not is_broken
+		return
+	if not is_broken:
+		_reset_mast_fall()
+		return
+	if masts_toppled:
+		return
+	masts_toppled = true
+	var assemblies := _find_mast_assemblies()
+	for index in range(assemblies.size()):
+		_topple_mast(assemblies[index], index)
+	# Masthead flags and streamers aren't children of the assemblies (flags
+	# are builder-owned at anchor positions, streamers live in the GLB's Flags
+	# group), so they'd hover where the masthead used to be. They go down with
+	# the rig instead; only the stern ensign keeps flying.
+	_set_masthead_canvas_visible(false)
+
+
+func _set_masthead_canvas_visible(is_visible: bool) -> void:
+	for flag in flag_nodes:
+		if is_instance_valid(flag) and str(flag.get_meta("flag_anchor", "")) == "main":
+			flag.visible = is_visible
+	if model_visual:
+		for streamer in _find_mesh_children(model_visual, "Streamer_"):
+			streamer.visible = is_visible
+
+
+func _find_mast_assemblies() -> Array[Node3D]:
+	var found: Array[Node3D] = []
+	if model_visual == null:
+		return found
+	for assembly_name in MAST_ASSEMBLY_NAMES:
+		var node := _find_node_named(model_visual, assembly_name)
+		if node:
+			found.append(node)
+	return found
+
+
+func _topple_mast(assembly: Node3D, index: int) -> void:
+	# Alternate fall sides so a multi-mast wreck sprawls instead of stacking.
+	var side := 1.0 if index % 2 == 0 else -1.0
+	var tween := create_tween()
+	mast_fall_tweens.append(tween)
+	tween.tween_interval(0.15 + MAST_FALL_STAGGER * float(index))
+	# Accelerating timber fall past the resting angle, then a short rebound
+	# settle as the rig fetches up on the rail and its own rigging.
+	tween.tween_property(assembly, "rotation_degrees",
+		Vector3(-MAST_FALL_PITCH_DEGREES, 0.0, (MAST_FALL_ROLL_DEGREES + 7.0) * side),
+		MAST_FALL_SECONDS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(assembly, "rotation_degrees",
+		Vector3(-MAST_FALL_PITCH_DEGREES, 0.0, MAST_FALL_ROLL_DEGREES * side),
+		0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(_splash_fallen_mast.bind(assembly))
+
+
+# Masthead water contact: the assembly pivot sits at the deck foot, so the
+# fallen tip lies a rig-height away along the toppled local up axis.
+func _splash_fallen_mast(assembly: Node3D) -> void:
+	if not is_inside_tree() or not is_instance_valid(assembly):
+		return
+	var height := _estimate_assembly_height(assembly)
+	var tip := assembly.global_position + assembly.global_transform.basis.y.normalized() * height
+	FoamRingEffect.spawn(get_parent(), Vector3(tip.x, 0.0, tip.z), 0.5, 3.4, 1.1, 0.0, 0.6)
+	FollowCamera.add_trauma_at(self, tip, 0.35, 60.0)
+
+
+func _estimate_assembly_height(assembly: Node3D) -> float:
+	var top := 0.0
+	for child in assembly.get_children():
+		if child is MeshInstance3D:
+			var aabb: AABB = (child as MeshInstance3D).get_aabb()
+			top = maxf(top, child.position.y + aabb.end.y)
+	return maxf(top, 1.0) * assembly.global_transform.basis.get_scale().y
+
+
+func _reset_mast_fall() -> void:
+	if not masts_toppled:
+		return
+	masts_toppled = false
+	for tween in mast_fall_tweens:
+		if tween.is_valid():
+			tween.kill()
+	mast_fall_tweens.clear()
+	for assembly in _find_mast_assemblies():
+		assembly.rotation_degrees = Vector3.ZERO
+	_set_masthead_canvas_visible(true)
 
 
 func _clear_generated() -> void:
 	sail_nodes.clear()
+	sail_canvas_materials.clear()
 	flag_nodes.clear()
-	flag_billboard_nodes.clear()
 	fire_socket_positions.clear()
+	# Kill in-flight mast falls before their target assemblies are freed.
+	masts_toppled = false
+	for tween in mast_fall_tweens:
+		if tween.is_valid():
+			tween.kill()
+	mast_fall_tweens.clear()
+	# Fire visuals anchor to socket positions of the outgoing visuals; a
+	# rebuilt ship starts unlit (combat re-lights on the next state change).
+	if fire_root:
+		fire_root.queue_free()
+		fire_root = null
+	fire_flames.clear()
 	damage_overlay = null
 	model_visual = null
 	if generated_root:
@@ -165,16 +551,13 @@ func _apply_mesh_visual(hull: Dictionary, sail_color: Color) -> bool:
 
 	# Model sails (Sail_* meshes) join sail_nodes so faction tint, mast break,
 	# and trim keep working; the neutral canvas material takes the tint.
-	var sail_material := _standard_material(sail_color, 0.9)
+	var sail_material := _make_sail_canvas_material(sail_color)
 	for sail in _find_mesh_children(model_visual, "Sail_"):
 		sail.material_override = sail_material
 		sail_nodes.append(sail)
 
-	_add_damage_overlay(
-		float(hull.get("width", 1.45)),
-		float(hull.get("height", 0.55)),
-		float(hull.get("length", 3.25))
-	)
+	# No damage overlay in mesh mode: the box wrapped visibly around detailed
+	# hulls. Damage reads through the progressive list (set_damage_fraction).
 	return true
 
 
@@ -313,7 +696,7 @@ func _build_sails(sails: Dictionary, sail_color: Color) -> void:
 		mesh_instance.name = "Sail_%s" % sail_id
 		mesh_instance.set_meta("sail_geometry", _build_sail_geometry(str(sail.get("type", "square")), _parse_vec2(str(sail.get("size", "[1.0, 1.0]")))))
 		mesh_instance.position = _parse_vec3(str(sail.get("position", "[0.0, 1.2, 0.0]")))
-		mesh_instance.material_override = _standard_material(sail_color, 0.92, true)
+		mesh_instance.material_override = _make_sail_canvas_material(sail_color)
 		# Default trim matches the controllers' default; ships that never call
 		# update_sail_trim (enemy battle ships) still read as filled.
 		_apply_sail_billow(mesh_instance, 0.85)
@@ -324,32 +707,37 @@ func _build_sails(sails: Dictionary, sail_color: Color) -> void:
 func _build_flags(flags: Dictionary, flag: Dictionary, anchors: Dictionary = {}) -> void:
 	var flag_ids := flags.keys()
 	flag_ids.sort()
+	var profile_scale := float(current_profile.get("scale", 1.0))
+	var pattern := str(flag.get("pattern", "field"))
+	var flag_index := 0
 	for flag_id in flag_ids:
 		var flag_config: Dictionary = flags[flag_id]
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.name = "Flag_%s" % flag_id
-		var flag_size := _parse_vec2(str(flag_config.get("size", "[0.6, 0.35]")))
-		var pattern := str(flag.get("pattern", "field"))
-		var minimum_size := Vector2(1.55, 0.9) if pattern == "skull" else Vector2(1.2, 0.68)
-		flag_size = Vector2(maxf(flag_size.x * 1.9, minimum_size.x), maxf(flag_size.y * 1.9, minimum_size.y))
-		mesh_instance.mesh = _make_flag_mesh(flag_size)
-		# Mesh-mode ships provide Anchor_Flag_* positions from the model; the
-		# hand-tuned profile offsets only apply to the procedural ships.
+		var flag_size := _parse_vec2(str(flag_config.get("size", "[0.6, 0.35]"))) * FLAG_SIZE_MULTIPLIER
+		if pattern == "skull" and flag_size.x < FLAG_SKULL_MIN_WIDTH * profile_scale:
+			flag_size *= FLAG_SKULL_MIN_WIDTH * profile_scale / flag_size.x
+		mesh_instance.set_meta("flag_geometry", _build_flag_geometry(flag_size))
+		# Desynchronize the ripple across a ship's flags.
+		mesh_instance.set_meta("flag_phase", float(flag_index) * 2.4)
+		# The node origin is the staff: the hoist edge sits at local x=0 and
+		# the canvas spans upward, so wind yaw pivots around the pole. Anchors
+		# (and the procedural-path profile positions) mark the flag's foot.
 		var anchor_key := "stern" if "stern" in str(flag_id) else "main"
-		var flag_position: Vector3
+		# Masthead flags go down with their mast on a break; the stern ensign
+		# flies from the sterncastle staff and survives.
+		mesh_instance.set_meta("flag_anchor", anchor_key)
 		if anchors.has(anchor_key):
-			flag_position = anchors[anchor_key]
-			flag_position.y += flag_size.y * 0.5
+			mesh_instance.position = anchors[anchor_key]
 		else:
-			flag_position = _parse_vec3(str(flag_config.get("position", "[0.0, 1.4, 1.4]")))
-			flag_position.x += 0.82
-			flag_position.y += 0.42
-		mesh_instance.position = flag_position
-		mesh_instance.rotation_degrees = Vector3(0.0, -35.0, -4.0)
+			mesh_instance.position = _parse_vec3(str(flag_config.get("position", "[0.0, 1.4, 1.4]")))
+		# Stream aft until the wind takes it (and forever on windless NPCs).
+		mesh_instance.rotation.y = -PI * 0.5
 		mesh_instance.material_override = _make_flag_material(flag)
+		_apply_flag_ripple(mesh_instance)
 		generated_root.add_child(mesh_instance)
 		flag_nodes.append(mesh_instance)
-		flag_billboard_nodes.append(mesh_instance)
+		flag_index += 1
 
 
 func _cache_visual_state_sockets(states: Dictionary) -> void:
@@ -509,28 +897,73 @@ func _compute_smooth_normals(vertices: PackedVector3Array, indices: PackedInt32A
 	return normals
 
 
-func _make_flag_mesh(size: Vector2) -> ArrayMesh:
-	var vertices := PackedVector3Array([
-		Vector3(-size.x * 0.5, -size.y * 0.5, 0.0),
-		Vector3(size.x * 0.5, -size.y * 0.5, 0.0),
-		Vector3(size.x * 0.48, size.y * 0.5, 0.08),
-		Vector3(-size.x * 0.48, size.y * 0.5, 0.08)
-	])
-	var uvs := PackedVector2Array([
-		Vector2(0.0, 1.0),
-		Vector2(1.0, 1.0),
-		Vector2(1.0, 0.0),
-		Vector2(0.0, 0.0)
-	])
-	var indices := PackedInt32Array([0, 1, 2, 0, 2, 3])
+# Subdivided flag canvas: hoist at x=0, fly toward +X, foot at y=0. "reach"
+# is each vertex's 0..1 distance from the hoist — the ripple envelope, zero
+# at the staff so the attached edge never tears free.
+func _build_flag_geometry(size: Vector2) -> Dictionary:
+	const COLS := 10
+	const ROWS := 4
+	var vertices := PackedVector3Array()
+	var reach := PackedFloat32Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for row in range(ROWS + 1):
+		var v := float(row) / float(ROWS)
+		for col in range(COLS + 1):
+			var u := float(col) / float(COLS)
+			vertices.append(Vector3(u * size.x, (1.0 - v) * size.y, 0.0))
+			reach.append(u)
+			uvs.append(Vector2(u, v))
+	for row in range(ROWS):
+		for col in range(COLS):
+			var index := row * (COLS + 1) + col
+			indices.append_array(PackedInt32Array([
+				index, index + 1, index + COLS + 2,
+				index, index + COLS + 2, index + COLS + 1
+			]))
+	return {
+		"base_vertices": vertices,
+		"reach": reach,
+		"uvs": uvs,
+		"indices": indices,
+		"width": size.x,
+		"height": size.y
+	}
+
+
+# Traveling wave from hoist to fly, amplitude growing with reach, plus a
+# smaller vertical flap. Same hard-won rule as the sail billow: the rebuilt
+# surface needs explicit normals or the deformation gets no shading.
+func _apply_flag_ripple(mesh_instance: MeshInstance3D) -> void:
+	var data: Dictionary = mesh_instance.get_meta("flag_geometry", {})
+	if data.is_empty():
+		return
+	var base: PackedVector3Array = data.base_vertices
+	var reach: PackedFloat32Array = data.reach
+	var phase: float = float(mesh_instance.get_meta("flag_phase", 0.0))
+	var width: float = data.width
+	var height: float = data.height
+	var vertices := PackedVector3Array()
+	vertices.resize(base.size())
+	for index in range(base.size()):
+		var vertex := base[index]
+		var along := reach[index]
+		var wave := TAU * FLAG_WAVE_COUNT * along - FLAG_WAVE_SPEED * flag_time + phase
+		vertex.z += width * FLAG_RIPPLE_DEPTH * along * sin(wave)
+		vertex.y += height * FLAG_FLAP_DEPTH * along * sin(wave * 0.7 + 1.3)
+		vertices[index] = vertex
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_INDEX] = indices
-	var mesh := ArrayMesh.new()
+	arrays[Mesh.ARRAY_NORMAL] = _compute_smooth_normals(vertices, data.indices)
+	arrays[Mesh.ARRAY_TEX_UV] = data.uvs
+	arrays[Mesh.ARRAY_INDEX] = data.indices
+	var mesh := mesh_instance.mesh as ArrayMesh
+	if mesh == null:
+		mesh = ArrayMesh.new()
+		mesh_instance.mesh = mesh
+	mesh.clear_surfaces()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
 
 
 func _make_bow_mesh(width: float, height: float, length: float) -> ArrayMesh:
@@ -571,10 +1004,16 @@ func _make_flag_material(flag: Dictionary) -> StandardMaterial3D:
 		for x in range(image.get_width()):
 			image.set_pixel(x, y, _flag_pixel(pattern, x, y, image.get_width(), image.get_height(), primary, secondary, accent))
 	var texture := ImageTexture.create_from_image(image)
+	# Shaded (not unshaded) so the ripple's normals actually read as folds;
+	# the chunky NEAREST texture stays per ADR 0010. The emission lift fakes
+	# cloth translucency: without it the shadow side goes sky-gray and the
+	# faction read flips with the sun.
 	var material := _standard_material(Color.WHITE, 0.9, true)
 	material.albedo_texture = texture
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.emission_enabled = true
+	material.emission_texture = texture
+	material.emission = Color(0.4, 0.4, 0.4)
 	return material
 
 
