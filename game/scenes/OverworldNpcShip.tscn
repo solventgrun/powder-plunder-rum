@@ -1,8 +1,9 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://game/scripts/overworld/OverworldNpcShip.gd" id="1_npc"]
 [ext_resource type="Script" path="res://game/scripts/visuals/ShipVisualBuilder.gd" id="2_visual"]
 [ext_resource type="Script" path="res://game/scripts/visuals/ShipWaveMotion.gd" id="3_wave"]
+[ext_resource type="Script" path="res://game/scripts/visuals/ShipWake.gd" id="4_wake"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_hull"]
 size = Vector3(1.2, 0.38, 2.4)
@@ -35,7 +36,7 @@ size = Vector3(0.12, 1.0, 1.4)
 script = ExtResource("1_npc")
 
 [node name="WaterMarker" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.02, 0, 0, 0, 1, 0, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 0.02, 0, 0, 0, 1, 0, 0.45, 0)
 mesh = SubResource("CylinderMesh_marker")
 surface_material_override/0 = SubResource("StandardMaterial3D_marker")
 
@@ -59,6 +60,9 @@ surface_material_override/0 = SubResource("StandardMaterial3D_sail")
 
 [node name="ShipVisualBuilder" type="Node3D" parent="VisualRoot"]
 script = ExtResource("2_visual")
+
+[node name="ShipWake" type="Node3D" parent="."]
+script = ExtResource("4_wake")
 
 [node name="FactionFlag" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 2.8, -0.2)
