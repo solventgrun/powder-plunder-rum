@@ -1,0 +1,43 @@
+# Boarding rules. This is the naval-specific half of the CROSS SWORDS feature:
+# when grapples can be thrown, how a softened crew weakens the enemy captain,
+# and what a boarding costs in crew either way.
+#
+# Boarding is offered whenever you are alongside (user call 2026-08-17). What
+# softening buys is a weaker opponent, not permission — see `opponent_scaling`.
+boarding_rules:
+  - id: default
+    name: Standard Boarding
+    # Water between the two hulls, not distance between their centres: grapples
+    # reach across a gap, and how big that gap is has nothing to do with how big
+    # the ships are or which way they are lying. The old centre-distance version
+    # worked out to roughly four ship-lengths and let enemies board from across
+    # the battle (playtest 2026-08-17).
+    alongside_gap: 1.6
+    max_closing_speed: 5.0
+    grapple_time: 1.0
+    minimum_crew: 6
+    player_pistol: true
+    # Hands you take over the rail; the rest stay to work your ship. Their
+    # deck's defenders are their whole crew, and they fight slightly better for
+    # standing on their own planking.
+    boarding_party_fraction: 0.75
+    defender_strength: 1.1
+    # How close you have to be before an enemy starts considering boarding you,
+    # as a multiple of alongside distance. They then bear down to close, which
+    # is the warning the player gets before grapples land.
+    enemy_interest_multiplier: 2.6
+    condition:
+      crew_weight: 0.65
+      morale_weight: 0.35
+    # Softening the enemy makes their captain weak; the floors stop it making
+    # him inert. A broken crew's captain must still fence badly rather than
+    # stand there being hit (playtest 2026-08-17) — the reward for grape shot is
+    # an easy fight, not an unopposed one.
+    opponent_scaling:
+      vigor_weak_multiplier: 0.55
+      vigor_fresh_multiplier: 1.15
+      reaction_penalty: 0.22
+      read_penalty: 0.3
+      aggression_penalty: 0.35
+      minimum_read_accuracy: 0.22
+      minimum_aggression: 0.32

@@ -1,0 +1,91 @@
+# Opponent archetypes. A fighter is data: pools, timings, tendencies, and a
+# look. Nothing here knows what kind of fight it is being used in.
+#
+# reaction_time     seconds before the brain can answer a tell it has seen
+# read_accuracy     0..1 chance it picks the correct evasion when it answers
+# aggression        0..1 how often it presses an attack when free to act
+# feint_chance      0..1 chance a windup is a bait it cancels out of
+# pistol_chance     0..1 chance this fighter carries a shot at all
+# pistol_discipline 0..1 how well it waits for a safe window to fire
+# coat/accent       hex html; the procedural figure's coat and trim
+duel_profiles:
+  - id: merchant_master
+    name: Merchant Master
+    vigor: 72
+    weapon: cutlass
+    reaction_time: 0.52
+    read_accuracy: 0.38
+    aggression: 0.34
+    feint_chance: 0.1
+    pistol_chance: 0.15
+    pistol_discipline: 0.3
+    coat: "5a4a34"
+    accent: "b8a98a"
+    hat: none
+
+  - id: naval_officer
+    name: Naval Officer
+    vigor: 100
+    weapon: longsword
+    reaction_time: 0.33
+    read_accuracy: 0.6
+    aggression: 0.58
+    feint_chance: 0.25
+    pistol_chance: 0.55
+    pistol_discipline: 0.85
+    coat: "8f1a10"
+    accent: "d9a12e"
+    hat: tricorn
+
+  - id: galleon_master
+    name: Fleet Captain
+    vigor: 126
+    weapon: broadsword
+    reaction_time: 0.36
+    read_accuracy: 0.63
+    aggression: 0.5
+    feint_chance: 0.2
+    pistol_chance: 0.65
+    pistol_discipline: 0.8
+    coat: "2a1c3a"
+    accent: "d9a12e"
+    hat: tricorn
+
+  - id: pirate_captain
+    name: Pirate Captain
+    vigor: 112
+    weapon: cutlass
+    reaction_time: 0.3
+    read_accuracy: 0.55
+    aggression: 0.82
+    feint_chance: 0.32
+    pistol_chance: 0.4
+    pistol_discipline: 0.25
+    coat: "3a2416"
+    accent: "8f1a10"
+    hat: bandana
+
+# Which archetype defends which deck. `any` is a wildcard; a faction match
+# outweighs a ship-type match, so a pirate crew sailing a captured galleon
+# still fields a pirate captain. The `any/any` record is the fallback and must
+# exist.
+captain_assignments:
+  - id: pirate_decks
+    faction: pirates
+    ship_type: any
+    profile: pirate_captain
+
+  - id: galleon_decks
+    faction: any
+    ship_type: galleon
+    profile: galleon_master
+
+  - id: sloop_decks
+    faction: any
+    ship_type: sloop
+    profile: merchant_master
+
+  - id: fallback
+    faction: any
+    ship_type: any
+    profile: naval_officer

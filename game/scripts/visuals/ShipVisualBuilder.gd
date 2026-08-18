@@ -21,6 +21,34 @@ const SAIL_PALETTES := {
 	"pirate_canvas": Color(0.64, 0.55, 0.42, 1.0)
 }
 
+# Faction livery Phase 1 (expansion brief "Faction Livery Kits"): the GLB
+# fleet's named material slots map onto livery roles, and
+# data/visuals/faction_liveries.yaml assigns per-faction colors to the roles.
+# Runtime recolor only — models stay shared; factions without a livery
+# (pirates) keep their class scheme.
+const LIVERY_MATERIAL_ROLES := {
+	"deep burgundy satin paint": "paint",
+	"deep navy satin paint": "paint",
+	"buff sand gun band": "paint",
+	"rich gold-amber gun band": "paint",
+	"muted brig bulwark navy": "accent",
+	"deep sloop stern navy": "accent",
+	"dark aged walnut with grain": "hull_wood",
+	"near-black hull oak with grain": "hull_wood",
+	"tarred warm brown hull oak": "hull_wood",
+	"charcoal brown sloop hull oak": "hull_wood",
+	"shadowed counter timber": "hull_wood",
+	"bright aged gold trim": "trim",
+	"restrained aged gold trim": "trim",
+	"single worn brass accent": "trim",
+	"rationed gilt accent": "trim",
+	"french ivory ornament": "trim",
+	"french blue ornament": "accent",
+	"bright banner red": "streamer",
+	"bright signal red": "streamer",
+	"muted signal red": "streamer",
+}
+
 # Flags honor the profile-authored sizes with a modest readability bump; the
 # old x1.9 inflation plus global minimums were tuned for featureless
 # procedural boxes and dwarfed the mesh fleet. The skull keeps a legibility
@@ -161,13 +189,18 @@ func apply_visuals(ship_record: Dictionary, stats: Resource) -> void:
 	var faction_id := str(ship_record.get("faction", "pirates"))
 	var faction: Dictionary = factions.get(faction_id, factions.get("pirates", {}))
 	var flag: Dictionary = flags.get(str(faction.get("flag", "jolly_roger")), flags.get("jolly_roger", {}))
-	var sail_color := _sail_color(str(faction.get("sail_palette", "naval_canvas")), str(ship_record.get("visual_variant", "")))
+	var livery: Dictionary = ContentCatalog.load_faction_liveries().get(faction_id, {})
+	var variant := str(ship_record.get("visual_variant", ""))
+	var sail_color := _sail_color(str(faction.get("sail_palette", "naval_canvas")), variant)
+	if livery.has("sails"):
+		sail_color = _variant_adjusted(Color.html(str(livery.get("sails"))), variant)
 	sail_base_color = sail_color
 
 	var hull_config: Dictionary = current_profile.get("hull", {})
-	if str(hull_config.get("mode", "procedural")) == "mesh" and _apply_mesh_visual(hull_config, sail_color):
+	if str(hull_config.get("mode", "procedural")) == "mesh" and _apply_mesh_visual(hull_config, sail_color, faction_id):
 		# Model-carried hull/masts/sails/rigging (ADR 0010); flags stay
 		# procedural, attached at the model's Anchor_Flag_* empties.
+		_apply_faction_livery(livery)
 		_build_flags(current_profile.get("flags", {}), flag, _flag_anchor_positions())
 		_cache_visual_state_sockets(current_profile.get("visual_states", {}))
 		_override_fire_sockets_from_anchors()
@@ -529,8 +562,12 @@ func _clear_generated() -> void:
 			placeholder.visible = true
 
 
-func _apply_mesh_visual(hull: Dictionary, sail_color: Color) -> bool:
-	var scene_path := str(hull.get("scene", ""))
+func _apply_mesh_visual(hull: Dictionary, sail_color: Color, faction_id: String = "") -> bool:
+	# Faction geometry is intentionally chosen at asset-load time. The GLBs are
+	# still baked by the deterministic Blender generators; this only selects the
+	# appropriate complete ship scene, never loose runtime-composed parts.
+	var faction_scenes: Dictionary = hull.get("faction_scenes", {})
+	var scene_path := str(faction_scenes.get(faction_id, hull.get("scene", "")))
 	if scene_path.is_empty():
 		return false
 	var packed := load(scene_path) as PackedScene
@@ -559,6 +596,36 @@ func _apply_mesh_visual(hull: Dictionary, sail_color: Color) -> bool:
 	# No damage overlay in mesh mode: the box wrapped visibly around detailed
 	# hulls. Damage reads through the progressive list (set_damage_fraction).
 	return true
+
+
+# Recolors the model's livery-role material slots for the ship's faction.
+# Surface overrides are per MeshInstance3D instance, so shared imported
+# meshes/materials never leak color across ships; duplicates are cached per
+# source material so a slot stays one material per ship.
+func _apply_faction_livery(livery: Dictionary) -> void:
+	if livery.is_empty() or model_visual == null:
+		return
+	var recolored: Dictionary = {}
+	for mesh_instance in _find_mesh_children(model_visual, ""):
+		if mesh_instance.material_override:
+			continue  # Sails wear the canvas material; livery tints them via "sails".
+		var mesh := mesh_instance.mesh
+		if mesh == null:
+			continue
+		for surface_index in range(mesh.get_surface_count()):
+			var material := mesh_instance.get_active_material(surface_index)
+			if material == null:
+				continue
+			var role: String = LIVERY_MATERIAL_ROLES.get(material.resource_name, "")
+			if role.is_empty() or not livery.has(role):
+				continue
+			var key := material.get_instance_id()
+			if not recolored.has(key):
+				var recolor := material.duplicate() as Material
+				if recolor is BaseMaterial3D:
+					(recolor as BaseMaterial3D).albedo_color = Color.html(str(livery.get(role)))
+				recolored[key] = recolor
+			mesh_instance.set_surface_override_material(surface_index, recolored[key])
 
 
 func _find_mesh_children(root: Node, prefix: String) -> Array[MeshInstance3D]:
@@ -1178,11 +1245,14 @@ func _hull_color(faction_id: String) -> Color:
 
 
 func _sail_color(palette_id: String, variant: String) -> Color:
-	var color: Color = SAIL_PALETTES.get(palette_id, SAIL_PALETTES.naval_canvas)
+	return _variant_adjusted(SAIL_PALETTES.get(palette_id, SAIL_PALETTES.naval_canvas), variant)
+
+
+func _variant_adjusted(color: Color, variant: String) -> Color:
 	if variant == "worn":
-		color = color.darkened(0.16)
+		return color.darkened(0.16)
 	elif variant == "patrol":
-		color = color.lightened(0.06)
+		return color.lightened(0.06)
 	return color
 
 

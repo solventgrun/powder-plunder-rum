@@ -676,6 +676,8 @@ The player can:
 
 ### Milestone 4 - Primitive Port
 
+**Built 2026-08-17.** Architecture: [ADR 0017](../decisions/0017-primitive-port-and-fleet-management.md). Port Royal is now reachable from the overworld when close enough, and presents separate screens for selling cargo, buying provisions, repairing ships, hiring crew, managing the fleet, and leaving port. Fleet management is shared with the overworld via `M`.
+
 Create one port with minimal interaction.
 
 Possible options:
@@ -754,7 +756,21 @@ Possible systems:
 
 Added after the fleet visual pass (all four ship classes now sail Blender-built meshes). These are menu items like the milestones above, with one sequencing rule the user set: **boarding comes before post-battle consequences**, because together they complete the naval battle sequence — battle → boarding → duel → consequences.
 
+That sequence is now closed: both are built (2026-08-17). The naval loop runs end to end — sail, fight, board, duel, decide what comes home, sail on carrying it.
+
 #### Boarding Duel — CROSS SWORDS
+
+**Built 2026-08-17.** Design record: [Boarding & Sword Duel Brief](boarding-duel-brief.md); architecture: [ADR 0011](../decisions/0011-context-free-duel-system.md). What shipped differs from the sketch below in ways the user decided during the build:
+
+- **3D deck arena, not a 2D minigame** — the reference is the *Pirates!* (2004) deck duel, so the fight is staged on a plank deck with chunky procedural fighters.
+- **Vigor pools**, not an advantage bar.
+- **Attacks left, evasions centre** on the numpad, each attack answered by exactly one evasion (`7` chop ← `2` duck, `4` thrust ← `5` parry, `1` slash ← `8` jump — evasions sit where your body goes, jump up top and duck at the bottom; the mirrored arrangement was played and rejected on feel); taunt on `6`, a one-shot pistol on `9`, slot `3` reserved.
+- **Weapon choice per fight** (cutlass / longsword / broadsword) trading speed against weight.
+- **Boarding is offered whenever alongside** — softening the crew scales the captain you meet rather than unlocking the prompt.
+- **Losing the duel loses the battle.**
+- The duel is **context-free and reusable**: callers pass a context dictionary and receive a result, so tavern brawls and land duels need no changes inside `game/scripts/duel/`.
+
+Original sketch, kept for the record:
 
 A small, separate 2D minigame (per the distinct-minigames principle): when boarding conditions are met in a naval battle, the player crosses swords with the opposing captain in a 2D duel controlled on the **number pad**.
 
@@ -777,7 +793,182 @@ Keep the duel readable and campy — a few clean actions with clear tells, not a
 
 #### Post-Battle Consequences
 
-Winning a battle currently just returns to the overworld. Add the first real "continuous consequences" payload: a post-battle result screen (gold, cargo, crew losses, prize decisions once boarding exists), and persistence — a sunk or captured NPC ship should not simply respawn on its route. Feeds directly into the Primitive Port milestone's economy (repair costs, selling plunder). Sequenced **after** the boarding duel.
+**Built 2026-08-17.** Architecture: [ADR 0016](../decisions/0016-post-battle-consequences-cargo-and-the-player-fleet.md). What shipped is larger than the sketch below, because the user's answers during scoping turned "post-battle rewards" into "the player has a fleet":
+
+- **A fleet, not a ship.** `GameSession` owns an array of ships; `player_ship.yaml` is the starting fleet rather than the permanent truth. Take a prize as a consort, or shift your flag to her. The long-term intent is starting in a sloop and working up.
+- **Damage persists fully, with no free repair** (user call). The counterplay is the fleet itself: a battered ship is mended by taking a fresh one. Naval stores jury-rig at sea, medicine returns wounded to duty, rum holds a crew together.
+- **Twelve cargo types in three roles** — plunder / powder / rum, named for the game. Value per ton spreads ~60× and scarcity lives in the manifests, hand-authored where it matters and rolled from a `cargo_role` otherwise.
+- **Cargo weighs against the same allowance as guns**, so the shipped frigate (220 tons of gun, 220-ton hull) cannot carry plunder until guns go over the side.
+- **Morale finally bites** — gunnery, surrender, desertion, and boarding strength — tuned from a new `morale:` difficulty section. Rum lifts it and makes the crew drunk; drunkenness persists per ship.
+- **An after-action screen** decides what comes home: cargo, her guns, her crew, and her fate. UX correction, 2026-08-17: the adjustable post-battle choices use sliders with live selected/available readouts.
+
+Original entry, kept for the record: *Winning a battle currently just returns to the overworld. Add the first real "continuous consequences" payload: a post-battle result screen (gold, cargo, crew losses, prize decisions once boarding exists), and persistence — a sunk or captured NPC ship should not simply respawn on its route. Feeds directly into the Primitive Port milestone's economy (repair costs, selling plunder).*
+
+Deliberately deferred out of this pass: escorting prizes to port for sale (needs Milestone 4), consorts fighting alongside you (that is Multi-Ship Battle Readiness), asymmetric refits (want a port to do them in), and ammunition consumption (below).
+
+#### Specie and Payroll Loot (added 2026-08-17, user directive)
+
+Current treasure cargo sells too small for the fantasy and historical frame: the authored Spanish treasure galleon is rich as cargo, but a full sale is still only a low-thousands purse event. Treasure fleets and military payroll vessels need a second loot channel: **coin / plate / specie** that goes directly to the purse and does not occupy hold space once captured.
+
+Design distinction:
+
+- **Weighted treasure cargo** (`gold`, `luxury_goods`, spices, etc.) is the hold decision. It asks what the player can physically carry to port.
+- **Specie / payroll loot** is the jackpot. It represents chests of coin, plate, pay, and account-cleared wealth that makes a named treasure ship or payroll vessel feel materially different from an ordinary trader.
+
+Likely data shape: add an optional purse-value field to authored encounter loadouts, e.g. `specie_value` or `payroll_value`, and surface it at the after-action screen beside cargo. Treasure galleons might sit in the **3000-8000** purse range, military payroll ships around **2000-6000**, and ordinary traders at zero or token amounts. Keep this hand-authored where it matters; role-generated cargo should not automatically mint jackpot money.
+
+This amends the ADR 0016 "gold as a session counter" rejection: weightless money is still wrong as ordinary cargo because it would erase the hold decision, but explicit treasure/payroll specie is a separate reward layer for ships whose identity is "floating treasury."
+
+#### Ammunition as Cargo (added 2026-08-17)
+
+`gunpowder` and `round_shot` exist as cargo types and are currently valuable-but-inert: they sell, they weigh, they do nothing. Spending them when the guns fire turns a raid into a resupply run and gives grape and chain a real opportunity cost. Held back deliberately so the fleet playtest is not also an ammunition-scarcity playtest — it rebalances every naval engagement and deserves its own.
+
+#### Prisoners and Ransom (added 2026-08-17, user directive)
+
+Captured officers, passengers and crew as a kind of cargo that argues with itself: worth a great deal ransomed, but they eat provisions and take hands to guard. Pairs with the after-action screen, which already asks what a hold will carry, and with the persistent-captains idea (principle 15) — ransoming a rival back is a story the simulation writes itself.
+
+This is also where the game decides how it handles the period's human trafficking, which is a deliberate authorial choice rather than a systems one. Settle that with the user before building anything.
+
+#### Captured, Not Finished (added 2026-08-17, user directive)
+
+Being captured should not always be an immediate campaign-over screen, but it also should not become a soft failure state. This is a pirate game: pirates who are caught by lawful powers are often hanged. The world needs enough legal identity to decide whether the player is executed, ransomed, exchanged, imprisoned, or given one desperate chance to escape.
+
+Core design rule:
+
+> Rank can protect a pirate from law. Notoriety can burn that protection away.
+
+The capture outcome should eventually depend on:
+
+- **who captured the player** — lawful navy, town governor, pirate crew, rival captain, militia, or another authority
+- **the player's standing with that captor** — rank, title, commission, citizenship, or protection from the captor or its enemies
+- **stored wealth and estates** — whether the player is worth ransoming and whether they can pay their own ransom
+- **war state** — a ranked enemy might be exchanged, ransomed, or held until hostilities end
+- **notoriety with that faction** — atrocities and betrayals that make the captor prefer execution even when ransom would otherwise make sense
+- **captor personality and policy** — a greedy governor, proud admiral, vengeful rival, or drunken pirate should not all judge the same case identically
+
+This feature highlights several world systems that should be backlog items in their own right:
+
+- **Faction Rank and Titles** — formal standing with Spain, England, France, the Dutch, pirate factions, and eventually the Republic of Rum as a real state/faction.
+- **Letters of Marque / Legal Piracy** — whether the player's violence is treated as piracy, privateering, or wartime service.
+- **Faction-Specific Notoriety** — separate from fame or reputation; this measures whether a faction wants the player punished personally. Executing captured sailors, sinking surrendered or disabled ships, torturing town leaders for treasure information, brutal sacks, breaking parole, betraying commissions, and similar dark deeds should raise it sharply.
+- **Bounties** — related to notoriety but not identical: the money a faction offers for the player's capture.
+- **Stored Gold and Long-Term Wealth** — cargo gold is physical plunder with weight; stored gold is secured wealth used for ransom, bribes, crew shares, estates, retirement, and future investments.
+- **Land and Estates** — long-term prestige and wealth that can influence ransom value, social rank, retirement scoring, and political protection.
+- **Crew Plunder Division** — periodic division of plunder where the crew expects gold, not simply abstract cargo value.
+- **War Prisoner Logic** — ranked captives may be held until peace, exchanged for other prisoners, or used as diplomatic leverage.
+- **Execution Timers and Rescue** — if the verdict is hanging, the player may have a limited window for escape, bribery, ally intervention, or crew rescue.
+
+Smallest MVP slice:
+
+1. Track one simple player legal status (`pirate`, `protected`, `ranked`) and one `notoriety_by_faction` map.
+2. Split gold into physical `cargo_gold` and secured `stored_gold`.
+3. On player defeat, run a simple capture judgment:
+
+```text
+if notoriety_with_captor >= execution_threshold:
+    sentenced_to_hang
+elif player_is_ranked_or_protected:
+    ransom_or_exchange
+elif stored_gold >= ransom_price:
+    pay_ransom_or_attempt_escape
+else:
+    sentenced_to_hang_or_attempt_escape
+```
+
+4. Build one short escape chain, not a full stealth mode. Success returns the player to the overworld in a ruined state. Failure can end the campaign.
+
+Escape should be a compact procedural pirate-story generator made of cheap modules: a guard-routine timing challenge, a drunken-guard bluff, a context-free duel breakout, a rope descent, feigned death, a supply-wagon escape, or an optional crew-rescue risk. The first implementation only needs one or two modules to prove the loop.
+
+#### Republic of Rum (added 2026-08-17, user idea)
+
+Drunkenness is already tracked per ship and persists between battles, precisely so events can watch it. The Republic of Rum is the comic far end of that scale — a crew far enough gone to declare its own polity. Needs an event system first; the state it would fire on already exists.
+
+#### World Clock, Provisions, and Rations (added 2026-08-17, user directive)
+
+The game still lacks a real campaign clock. The brief already depends on timing — convoys arriving on days, treasure fleets departing, waiting for defenses to thin — and ports/post-battle persistence now make time a mechanical need rather than just a story idea.
+
+Food is now modeled at the cargo level as `provisions`: it can appear in hostile holds, be taken on the post-battle loot screen like any other cargo, and be bought at Port Royal. What does not exist yet is the daily consumption pass. That should change with the clock:
+
+- `GameSession` tracks a date/day counter and advances it from overworld sailing, waiting in port, repairs, and future travel/actions.
+- Each ship consumes provisions per day based on crew aboard.
+- Rum is controlled by a standing per-ship ration setting, not by the post-battle screen. Fleet management owns that policy; post-battle only reports what the battle did and what loot is taken.
+- Higher rum rations should consume rum faster, lift or stabilize morale, increase drunkenness, and eventually create event hooks such as Republic of Rum.
+- Low food should hit morale, health/crew, desertion, and surrender risk more sharply than low rum. Running out of both should feel like a genuine campaign problem, not a UI warning.
+
+Smallest remaining MVP: add `day`/`date` to `GameSession`, tick provisions and rum consumption once per elapsed campaign day, and show projected days of food/rum in fleet management and port screens.
+
+#### Player Captain and NPC Character System (added 2026-08-17, user directive)
+
+The game needs a visible character representation for the player captain, and the same system should eventually support NPC captains, governors, duel opponents, tavern characters, and other named people. This should be a modular Blender-to-Godot character kit, not a one-off player model, because the same representation must later appear in character creation, dialogue, wanted/ransom screens, sword fights, capture/escape scenes, rank rewards, and NPC records.
+
+Tone target: period-inspired pirate adventure, not strict reenactment. The art should support broad expressive variety while staying readable and deliberately retro beside the ships.
+
+Visual references:
+
+- European male pirate briefing image: [european-male-pirate-concept.jpg](reference-images/european-male-pirate-concept.jpg) (user-supplied 2026-08-17, replacing the earlier shared-chat URL `https://chatgpt.com/s/m_6a839d40940881918842f53609546f92`). Treat this as the starting visual direction for the European male head/body presentation, not as a hard limit on the broader modular character system.
+- African male pirate briefing image: [african-male-pirate-concept.jpg](reference-images/african-male-pirate-concept.jpg) (user-supplied 2026-08-17). Treat this as the starting visual direction for the African male head/body presentation, sharing the same base-adventurer clothing language while proving the character kit can support distinct head, skin, and hair reads.
+- European female pirate briefing image: [european-female-pirate-concept.jpg](reference-images/european-female-pirate-concept.jpg) (user-supplied 2026-08-17). Treat this as the starting visual direction for the European female head/body presentation, keeping the same practical base-adventurer kit while proving the character system supports a distinct female silhouette.
+- African female pirate briefing image: [african-female-pirate-concept.jpg](reference-images/african-female-pirate-concept.jpg) (user-supplied 2026-08-17). Treat this as the starting visual direction for the African female head/body presentation, keeping the shared starter-gear language while proving the kit can support braids, distinct facial structure, and a female silhouette.
+
+European male visual notes from the reference: young base adventurer around age 22, heroic but still plain; loose off-white shirt, dark worn vest/jacket layer, brown trousers, wide belt and cross-strap, tall folded boots, curved sword and flintlock pistol. Hair is dark, medium-length, wavy, and loose. Face reads charming, quick-witted, determined, and not yet legendary. Palette is restrained and practical: linen, tan leather, mid/dark browns, near-black leather, and a muted dark red accent. The model should leave room for growth from "nobody" to decorated captain.
+
+African male visual notes from the reference: same young base-adventurer premise and starter gear silhouette as the European version, with a darker skin-tone range, short tight curls, strong cheekbones/jaw, and a composed, determined expression. Clothing remains plain and functional: loose off-white shirt, worn dark vest/jacket layer, brown trousers, layered belts/cross-strap, tall folded boots, curved sword, and flintlock pistol. Palette stays practical and earth-toned so upgrades, rank decorations, and richer clothing can visibly carry progression later.
+
+European female visual notes from the reference: young base adventurer around age 22, charismatic and determined, with a capable fighter/sailor silhouette rather than a decorative costume. Starter clothing mirrors the shared poor gear language: loose off-white shirt, dark worn vest/jacket layer, fitted brown trousers, wide belt, muted red sash, tall folded boots, curved sword, and flintlock pistol. Hair is dark, wavy, and pulled back into a loose practical braid/pony-tail with flyaway strands. Palette remains linen, leather browns, near-black, and muted red so later earned clothing and rank pieces can read clearly.
+
+African female visual notes from the reference: young base adventurer around age 22 with a serious, capable fighter/sailor presence. Starter clothing follows the shared poor gear silhouette: loose off-white shirt, dark worn vest/jacket layer, fitted brown trousers, wide belt, muted red sash, tall folded boots, curved sword, and flintlock pistol. Hair is dark, tightly braided, and pulled back into long practical braids, with small bead/detail accents that should remain readable but not ornate at the starting tier. Palette stays linen, leather browns, near-black, and muted red; the face and skin-tone range should read distinctly from the African male version while staying in the same modular kit family.
+
+Long-term system:
+
+- Character records are data-driven and usable for both the player and NPCs.
+- Heads, bodies, hair, clothing, weapons, accessories, and decorations are separate swappable parts.
+- Heads and bodies are independent: any supported head can be matched with any supported body.
+- MVP ancestry/appearance bases are **African-looking** and **European-looking** heads, with male and female versions for each head family.
+- MVP body builds include at least a heroic/muscular build and a fat build, with male and female support.
+- Clothing should fit all supported bodies. If the implementation uses body-specific meshes, they still share the same slot ids and are selected by the character system rather than by hand-authored scene branching.
+- Skin tone, eye color, hair color, and clothing colors use constrained palettes rather than unconstrained color pickers, keeping the art directed and easier to validate.
+- Hair is a swappable mesh, with hair color tint applied separately.
+- Aging is not MVP because it needs a world clock/calendar first, but the model/material contract should allow wrinkles, grey hair, and scars later.
+- Rank and progression decorations are cosmetic items in the clothing/accessory system, but because they are earned from factions and accomplishments they will naturally carry meaning in other systems. Armor is visual at first but should be able to gain battle effects later.
+
+Initial supported slots should include:
+
+```text
+head
+body
+hair
+shirt
+jacket
+pants
+boots
+sash_or_belt
+face_accessory
+sword
+gun
+armor
+rank_decoration
+```
+
+Character creation MVP:
+
+- Choose sex/presentation: male or female.
+- Choose head family: African-looking or European-looking.
+- Choose body build: heroic/muscular or fat.
+- Choose one of two hairstyles available for the chosen setup.
+- Choose skin tone from a constrained palette.
+- Choose eye color from a constrained palette.
+- Choose hair color from a constrained palette.
+- Clothing is not freely chosen at creation: every player starts in poor, basic clothing. Better clothing, weapons, armor, eye patches, sashes, medals, and rank decorations are earned in play.
+
+Pipeline MVP:
+
+1. Build a Blender character kit with a shared rig/contract, named slots, and attachment points.
+2. Export enough parts to prove interchangeability: four heads (African-looking male/female, European-looking male/female), male and female bodies in heroic/muscular and fat builds, two hairstyle meshes per supported setup, poor default clothing, and at least one alternate item for each core clothing slot.
+3. Implement a Godot character assembler/preview scene that reads a character record and builds the model from modular parts.
+4. Support both hand-authored NPC records and generated NPC records from the same schema.
+5. Prove the system outside the duel first in a character creation or inspection scene. Replacing the current chunky procedural duel fighters comes later, after the character kit is stable.
+
+Acceptance bar for the first playable slice: create or load a character record, swap head/body/hair, apply skin/eye/hair palette choices, equip poor default clothing, swap at least one alternate shirt/jacket/pants/boots item through a debug or preview control, and render both a player captain and at least one NPC from the same system.
 
 #### Audio Pass
 
@@ -801,7 +992,9 @@ The galleon is the only ship in the game with two levels of guns, and its broads
 
 Implementation home is `BroadsideController` (volley timing and muzzle positions are already per-side and count-aware); the rule should key off per-side carried gun count, not ship id, so any future two-decker inherits it.
 
-#### Faction Livery Kits (added 2026-08-17)
+#### Faction Livery Kits (added 2026-08-17; Phase 1 closed 2026-08-17)
+
+**Built 2026-08-17.** Phase 1 is complete: fleet-wide faction palettes now live in `data/visuals/faction_liveries.yaml`, `ShipVisualBuilder.LIVERY_MATERIAL_ROLES` maps the GLB material slots to livery roles, runtime recolor covers paint / accent / hull wood / trim / streamer / sails, pirates have their own rougher palette, and `tools/_LiveryProbe.tscn` runs the flags-off recognition lineup.
 
 **Goal (user directive):** every faction gets its own separate visual identity so you can tell *who* you're engaging from the vessel itself at combat distance — not only from the flag. Class stays readable from silhouette; faction reads from livery.
 
@@ -813,7 +1006,75 @@ What already exists is mechanism, not the goal: `ship-asset-pipeline.md` reserve
 
 Pairs naturally with Multi-Ship Battle Readiness — knowing who is who matters most when several vessels share the screen.
 
-**Accepted framework (2026-08-17):** `docs/design/faction-visual-kit-proposal.md` — the five-layer kit structure (palette / stern / bow / deck dressing / sail treatment), per-nation visual languages, the flags-off recognition test, and this repo's phasing (palettes first at runtime, geometry via generator parameters only where recognition fails). The pirate conversion kit within it is deferred by user directive.
+**Accepted framework (2026-08-17):** `docs/design/faction-visual-kit-proposal.md` — the five-layer kit structure (palette / stern / bow / deck dressing / sail treatment), per-nation visual languages, the flags-off recognition test, and this repo's phasing (palettes first at runtime, geometry via generator parameters only where recognition fails).
+
+Closed scope: the palette/sail/streamer version of faction identity is done. Remaining work is split into separate backlog items below.
+
+#### Faction Visual Kits — Phase 2 Geometry (added 2026-08-17; closed 2026-08-18 after playtest)
+
+**Built and playtested 2026-08-18.** Follow-up to the closed Phase 1 livery pass is complete for the pairings that needed more than palette: French frigate and Dutch brig. Geometry stays bake-time through the deterministic Blender generators, with Godot selecting faction-specific scene overrides from `ship_visual_profiles.yaml`; runtime still owns color/livery application.
+
+What shipped:
+
+- France gets the bespoke `frigate_france.glb` / `FrenchFrigateVisual.tscn` kit: elegant rails, refined stern treatment, lanterns, blue/ivory grace notes, and a sea-nymph figurehead designed for gameplay-distance readability rather than close-up sculpture.
+- The Dutch get the bespoke `brig_dutch.glb` / `DutchBrigVisual.tscn` kit: broader practical work rails plus deck cargo and commerce dressing (barrels, crates, nets, loading beams, lashings) without changing the hull dimensions.
+- Spain and England remain palette-led for now; the flags-off read held well enough that adding geometry would be extra asset complexity without a proven readability gain.
+- The architecture rule held: class controls silhouette, faction controls visual language, and the Godot runtime does not assemble ships out of loose geometry pieces.
+
+Verification/playtest: `tools/_LiveryProbe.tscn` runs the flags-hidden recognition test, focused `--pilot-pairs` comparisons for French frigate vs standard and Dutch brig vs standard, and `--figurehead` distance ladder for the carved detail. User playtest signed off Phase 2; the livery backlog now moves on to the separate Pirate Conversion Visual Kit / Upgrade Visual Overlays / Expanded Visual Variants items rather than more national geometry.
+
+For carved detail specifically (figureheads, stern ornament), run the probe's `--figurehead` mode: it shoots the same carving at 2.5 / 5 / 12 / 24 world units — the last being the real battle-camera distance from `NavalBattle.tscn` — and saves a `_pixels` crop beside each frame, magnified with nearest-neighbour so the review sees the actual pixels the player receives rather than a smoothed upscale that invents detail. Use it to decide which sculpt work survives the distance it has to survive, and stop refining below that threshold.
+
+#### Pirate Conversion Visual Kit (added 2026-08-17)
+
+Pirates should eventually read as captured and improvised rather than as a normal navy with a different paint job. The Phase 1 pirate palette gives them tarred timber, oxblood bands, blackened trim, blood-red streamers, and darker canvas; this follow-up adds the full conversion layer.
+
+Desired read:
+
+- patched or mismatched sails
+- repainted-over hulls with exposed replacement planks
+- scraped-off national markings and vandalized crests
+- trophies, boarding gear, and rough repairs on deck
+- jury-rigged lines and mismatched cannon carriages
+- enough randomness that pirate vessels look individually stolen, not factory-issued
+
+Important rule: pirate visuals modify another faction's ship rather than replacing it. A pirate Spanish galleon should still show Spanish bones under the pirate conversion.
+
+#### Upgrade Visual Overlays (added 2026-08-17)
+
+Gameplay upgrades that should be visible on the hull belong near the livery system, but should remain distinct from faction identity. Examples include copper bottoms, reinforced hull work, extra armor, or other visible ship modifications.
+
+Preferred cost tiers:
+
+1. Material-level overlays first, such as a copper-bottom shader below the waterline.
+2. Hidden-by-default geometry in the GLB toggled at runtime if the upgrade needs actual shape.
+3. Avoid runtime-composed loose geometry unless there is no cheaper readable option.
+
+Composition rule: upgrades apply after livery and stay spatially distinct from faction cues. Waterline/deck details are good upgrade territory; bands, trim, sails, and streamers remain the main faction territory.
+
+#### Expanded Visual Variants (added 2026-08-18, user directive)
+
+`visual_variant` already rides on every ship record (player, target, overworld), but today it is a two-word vocabulary with one effect: the only consumer is `ShipVisualBuilder._variant_adjusted()`, where `worn` darkens the sail tint by 0.16 and `patrol` lightens it by 0.06. Nothing else reads it, no value is validated (a typo silently renders pristine), and `ShipLoadoutEditor` carries the field without offering to change it. It is the right hook in the right place — per-ship character, orthogonal to class and faction — and worth growing into a real system.
+
+**Goal:** two ships of the same class *and* faction should be able to tell different stories at a glance. A crisp patrol frigate fresh off the ways and the same frigate three months into a cruise should read differently before either fires a gun.
+
+Composition rule (extends the Upgrade Visual Overlays rule): class controls silhouette, faction controls livery, **variant controls this individual ship's condition and character**, upgrades apply after, and transient battle-damage states apply last. A variant must never break faction recognition — the flags-off probe still has to name the faction on the most weathered ship in the fleet.
+
+Candidate vocabulary (illustrative, not a fixed list):
+
+- `worn` (exists) — grow beyond sails: dulled paint, faded trim, darker canvas.
+- `patrol` (exists) — the crisp naval counterpart; bright canvas, clean paint.
+- `storm_beaten` — bleached sails, streaked hull, salt-scoured trim.
+- `fresh_from_the_yard` — the flagship read: brighter gilt, saturated paint, pale new canvas.
+- `long_cruise` — weed-darkened waterline, sun-faded upper works.
+- `prize` — a captured ship still wearing the scars of the battle that took her; pairs with ADR 0016's full damage persistence, which already gives the fleet ships whose history should show.
+
+**Likely shape (data-driven, no model work per ADR 0010):** promote the hardcoded ifs into `data/visuals/ship_variants.yaml`, one record per variant with per-role adjustments mirroring the livery roles (paint / accent / hull wood / trim / streamer / sails, each with darken/lighten/desaturate factors), so `_variant_adjusted()` becomes a lookup and variants stay moddable beside `faction_liveries.yaml` and `flags.yaml`. `ContentValidator` enumerates the variant ids so a typo fails loudly instead of no-opping. Cost tiers mirror the upgrade-overlay rule: (1) per-role color adjustment, (2) material parameters such as roughness for weathering, (3) geometry only where a variant read demonstrably fails without it.
+
+Two cheap payoffs once the vocabulary exists:
+
+- Role-generated overworld ships roll a variant, so traffic stops looking factory-issued. Complements the Pirate Conversion Kit without overlapping it — conversion is faction-level identity, variants are per-ship condition within any faction.
+- A variant picker in `ShipLoadoutEditor` (or the practice menu) makes the set visible and testable for free.
 
 ## Guiding Question for Agents
 

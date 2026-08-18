@@ -12,6 +12,7 @@ sheet: near-black hull, deep navy gun band edged in gold, restrained gold.
 Env knobs for iteration:
   FRIGATE_STAGE   hull | full   (default full)
   FRIGATE_QUALITY draft | final (default final)
+  FRIGATE_KIT     base | france (default base)
 """
 import math
 import os
@@ -34,6 +35,7 @@ from ship_kit import (
     add_sail,
     add_shaped_deck,
     add_side_gunport,
+    add_spar,
     add_square_sail,
     add_streamer,
     add_surface_cube,
@@ -57,6 +59,7 @@ OUT_DIR = Path(__file__).resolve().parent
 
 STAGE = os.environ.get("FRIGATE_STAGE", "full")
 QUALITY = os.environ.get("FRIGATE_QUALITY", "final")
+FACTION_KIT = os.environ.get("FRIGATE_KIT", "base")
 
 
 def station_profile():
@@ -249,7 +252,11 @@ def add_transom(materials):
     add_tapered_box("Transom_dark_counter_fairing", (0, 0.70, 2.30), 1.04, 1.00, 0.16, 0.26, dark, 0.020)
     add_cube("Transom_shadow_tuck", (0, 0.615, 2.28), (0.98, 0.040, 0.24), black, 0.008)
     add_cube("Transom_gold_lower_moulding", (0, 0.760, 2.435), (0.99, 0.020, 0.050), gold, 0.004)
-    add_cube("Transom_gold_upper_moulding", (0, 1.145, 2.415), (0.86, 0.018, 0.050), gold, 0.004)
+    # France kit: taffrail wood instead of gold — France's livery recolors the
+    # gold slot to ivory-cream, and this bar sits right between the stern
+    # lanterns where the cream read as a floating white strip.
+    upper_moulding = dark if FACTION_KIT == "france" else gold
+    add_cube("Transom_gold_upper_moulding", (0, 1.145, 2.415), (0.86, 0.018, 0.050), upper_moulding, 0.004)
     add_cube("Transom_dark_taffrail_cap", (0, 1.185, 2.41), (0.90, 0.038, 0.075), dark, 0.008)
 
     # One row of five stern windows on the aft face.
@@ -265,6 +272,469 @@ def add_transom(materials):
     # flag hangs from Anchor_Flag_Stern near its head (added with the anchors).
     add_cylinder_between("Transom_ensign_staff", (0, 1.16, 2.40), (0, 1.94, 2.58), 0.020, dark, 10)
     add_ellipsoid("Transom_ensign_staff_gold_truck", (0, 1.955, 2.585), (0.016, 0.020, 0.016), gold, 8, 4)
+
+
+# The sea-nymph is authored at a comfortable working size and then posed as a
+# unit. FIGUREHEAD_SCALE is capped by the bow envelope, not by taste: at 2.0
+# the head drives straight through the bowsprit and lands past its tip.
+# Solving against the spar underside, the waterline, and the tip gives 1.6 at
+# -10 deg of extra lean, which also aims her growth out along the spar instead
+# of up into it. Going bigger means lengthening the bowsprit or accepting that
+# she projects beyond it.
+FIGUREHEAD_SCALE = 1.6
+FIGUREHEAD_EXTRA_LEAN = math.radians(-10.0)
+FIGUREHEAD_PIVOT = Vector((0.0, 0.60, -2.70))
+
+
+def pose_french_figurehead(objects):
+    matrix = (
+        Matrix.Translation(FIGUREHEAD_PIVOT)
+        @ Matrix.Rotation(FIGUREHEAD_EXTRA_LEAN, 4, "X")
+        @ Matrix.Scale(FIGUREHEAD_SCALE, 4)
+        @ Matrix.Translation(-FIGUREHEAD_PIVOT)
+    )
+    for obj in objects:
+        obj.matrix_world = matrix @ obj.matrix_world
+
+
+def add_french_stern_lantern(materials, side):
+    # A real lantern silhouette (post, glass body in a cage, conical cap,
+    # finial) replacing the first pass's bare ivory ellipsoid. Copper cage and
+    # a deep-amber glass so the fixture reads metal, not white — copper is a
+    # new material name on purpose, outside the livery roles.
+    copper = materials["copper"]
+    glass = materials["lantern_glass"]
+    x = side * 0.47
+    add_cylinder_between(f"French_stern_lantern_post_{side}", (x, 1.185, 2.42), (x, 1.248, 2.44), 0.013, copper, 8)
+    add_ellipsoid(f"French_stern_lantern_base_{side}", (x, 1.252, 2.44), (0.038, 0.014, 0.038), copper, 10, 4)
+    add_ellipsoid(f"French_stern_lantern_glass_{side}", (x, 1.312, 2.44), (0.034, 0.052, 0.034), glass, 12, 8)
+    for i in range(4):
+        a = math.pi * 0.5 * i + math.pi * 0.25
+        rx = math.cos(a) * 0.036
+        rz = math.sin(a) * 0.036
+        add_cylinder_between(f"French_stern_lantern_rib_{side}_{i}", (x + rx, 1.260, 2.44 + rz), (x + rx, 1.364, 2.44 + rz), 0.007, copper, 6)
+    add_spar(f"French_stern_lantern_cap_{side}", (x, 1.366, 2.44), (x, 1.406, 2.44), 0.042, 0.012, copper, 10)
+    add_ellipsoid(f"French_stern_lantern_finial_{side}", (x, 1.414, 2.44), (0.012, 0.016, 0.012), copper, 8, 4)
+
+
+def add_water_curl(name, eye, yaw, tilt, radius, start, sweep, thickness, material, samples=16, drift=None):
+    """One tightening spiral, drawn in a plane whose normal is steered by yaw
+    and tilt. Steering matters: spirals sharing one plane stack into parallel
+    ribs and the sea reads as a basket, so every strand gets its own."""
+    normal = Vector((math.cos(yaw), tilt, math.sin(yaw)))
+    normal.normalize()
+    axis_a = Vector((0.0, 1.0, 0.0)).cross(normal)
+    if axis_a.length < 1e-4:
+        axis_a = Vector((1.0, 0.0, 0.0))
+    axis_a.normalize()
+    axis_b = normal.cross(axis_a).normalized()
+    points = []
+    for step in range(samples):
+        f = step / float(samples - 1)
+        angle = start + sweep * f
+        r = radius * (1.0 - 0.36 * f)
+        point = eye + axis_a * (math.cos(angle) * r) + axis_b * (math.sin(angle) * r)
+        if drift is not None:
+            point = point + drift * f
+        points.append((point.x, point.y, point.z))
+    add_polyline(name, points, thickness, material)
+    return points
+
+
+def add_water_swirl(name, centre, axis_a, axis_b, radius, turns, material, thickness, segments=20):
+    # Spiral tightening toward its centre — the eye of a curl. Water reads as
+    # motion far better with a couple of these than with more plain arcs.
+    points = []
+    for i in range(segments + 1):
+        f = i / float(segments)
+        angle = turns * 2.0 * math.pi * f
+        r = radius * (1.0 - 0.78 * f)
+        point = centre + axis_a * (math.cos(angle) * r) + axis_b * (math.sin(angle) * r)
+        points.append((point.x, point.y, point.z))
+    add_polyline(name, points, thickness, material)
+
+
+def add_french_sea(materials):
+    """The sea she rides, built from strands rather than solid masses so it
+    shares the hair's visual language and the whole carving reads as one
+    piece. A low core keeps daylight out; everything above it is flowing
+    strands, spiral curls, and foam beads."""
+    navy = materials["navy_paint"]
+    foam = materials["nymph_foam"]
+
+    # Low core swell — deliberately wide and flat. It is scenery for the
+    # strands to sit on, never the silhouette itself.
+    core = add_ellipsoid("French_sea_core", (0, 0.500, -2.766), (0.150, 0.092, 0.132), navy, 16, 10)
+    core.rotation_euler = (math.radians(-26.0), 0.0, 0.0)
+    shoulder = add_ellipsoid("French_sea_core_shoulder", (0, 0.600, -2.820), (0.108, 0.076, 0.098), navy, 14, 10)
+    shoulder.rotation_euler = (math.radians(-30.0), 0.0, 0.0)
+
+    # Breaking-curl strands: each is a partial SPIRAL in the fore-aft plane,
+    # sweeping up the wave face, over the crest, and tucking back toward its
+    # own eye. A tightening spiral is the actual shape of a breaking wave; a
+    # fixed polyline profile was the first attempt and the strands nested into
+    # angular staples. Radius, start angle, and sweep all vary per strand so
+    # they never stack concentrically.
+    for station in range(7):
+        u = (station - 3) / 3.0
+        base_x = u * 0.190
+        eye_y = 0.582 + 0.046 * (1.0 - abs(u)) - 0.020 * u * u
+        eye_z = -2.792 - 0.052 * (1.0 - abs(u))
+        for k in range(4):
+            phase = 1.7 * station + 2.3 * k
+            # Small and shallow on purpose: full-turn loops at this radius
+            # tangled into a ball of yarn. These are crescent ridges layering
+            # over the mound, with only the swirl eyes below closing fully.
+            radius = (0.062 + 0.020 * math.sin(phase)) * (0.78 + 0.22 * (1.0 - abs(u)))
+            # Outer stations swing their planes outboard, so the sea spreads
+            # away from the stem the way a bow wave actually throws.
+            yaw = 0.55 * u + 0.42 * math.sin(phase * 1.1)
+            tilt = 0.35 * math.sin(phase * 0.7)
+            points = add_water_curl(
+                "French_sea_curl_%d_%d" % (station, k),
+                Vector((base_x, eye_y, eye_z)),
+                yaw, tilt, radius,
+                math.radians(205.0 + 26.0 * math.sin(phase * 1.4)),
+                math.radians(168.0 + 30.0 * math.sin(phase * 0.9)),
+                0.0080, navy, samples=12,
+                drift=Vector((0.026 * u, 0.010, -0.016 * (1.0 - abs(u)))),
+            )
+            if k % 2 == 0:
+                crest = max(points, key=lambda p: p[1])
+                add_ellipsoid(
+                    "French_sea_curl_foam_%d_%d" % (station, k),
+                    (crest[0], crest[1] + 0.009, crest[2]),
+                    (0.017, 0.012, 0.017), foam, 8, 4,
+                )
+
+    # The water that replaces her legs: strands sweeping up around the hip
+    # blend so she emerges from the sea instead of standing in it.
+    body_up = Vector((0.0, 0.788, -0.6157))
+    body_front = Vector((0.0, -0.6157, -0.788))
+    leg_root = Vector((0.0, 0.600, -2.792))
+    # Spirals rather than a ring of uprights: strands climbing straight up
+    # around her hips built a picket cage. These sit tangent to the body at
+    # staggered heights and angles, so the water looks like it is turning over
+    # itself as it swallows her lower half.
+    for i in range(18):
+        angle = (i / 18.0) * 2.0 * math.pi * 1.35
+        phase = 2.1 * i
+        height = 0.020 + 0.175 * ((i % 9) / 8.0)
+        radial = Vector((math.sin(angle), 0.0, 0.0)) + body_front * math.cos(angle)
+        eye = leg_root + radial * (0.078 + 0.016 * math.sin(phase)) + body_up * height
+        points = add_water_curl(
+            "French_sea_leg_curl_%d" % i, eye,
+            angle + 1.5708 + 0.30 * math.sin(phase),      # plane tangent to her body
+            0.30 * math.sin(phase * 0.8),
+            0.036 + 0.014 * math.sin(phase * 1.3),
+            math.radians(190.0 + 40.0 * math.sin(phase)),
+            math.radians(180.0 + 40.0 * math.cos(phase)),
+            0.0074, navy, samples=11,
+            drift=body_up * 0.024 + radial * 0.016,
+        )
+        if i % 4 == 0:
+            crest = max(points, key=lambda p: p[1])
+            add_ellipsoid(
+                "French_sea_leg_foam_%d" % i, crest, (0.014, 0.010, 0.014), foam, 8, 4,
+            )
+
+    # Spiral eyes at the curl focal points — the bubbling, churning read.
+    # Flanking pairs only: a fifth swirl once sat centre-front at (0, 0.560,
+    # -2.900), which is exactly the fleur-de-lis shield's volume — it wove
+    # through the gold and read as water blocking the emblem (user feedback
+    # 2026-08-18). The centre-front of the wave face belongs to the heraldry.
+    side_axis = Vector((1.0, 0.0, 0.0))
+    for i, (centre, radius, turns) in enumerate((
+        (Vector((-0.150, 0.610, -2.735)), 0.055, 1.35),
+        (Vector((0.150, 0.610, -2.735)), 0.055, -1.35),
+        (Vector((-0.072, 0.690, -2.860)), 0.044, -1.20),
+        (Vector((0.072, 0.690, -2.860)), 0.044, 1.20),
+    )):
+        add_water_swirl(
+            "French_sea_swirl_%d" % i, centre, side_axis, body_up, radius, turns, navy, 0.0075,
+        )
+        add_ellipsoid("French_sea_swirl_eye_%d" % i, tuple(centre), (0.014, 0.010, 0.014), foam, 8, 4)
+
+    # Scattered bubble beads through the churn.
+    for i in range(22):
+        a = i * 2.399           # golden-angle scatter, no visible grid
+        r = 0.055 + 0.135 * math.sqrt((i % 11) / 11.0)
+        bead = Vector((math.cos(a) * r, 0.470 + 0.150 * ((i % 7) / 7.0), -2.760 + math.sin(a) * r * 0.62))
+        size = 0.008 + 0.007 * ((i % 5) / 5.0)
+        add_ellipsoid("French_sea_bubble_%d" % i, tuple(bead), (size, size * 0.75, size), foam, 8, 4)
+
+
+def add_french_figurehead(materials):
+    """Sea-nymph figurehead (user concept 2026-08-17): chunky color-blocked
+    masses so she reads at gameplay distance — ivory-stone figure, French-blue
+    drapery and wave base, true gold only on the small accents. Detail budget
+    goes to the three silhouette cues: forward lean, swept-back hair, wave curl."""
+    skin = materials["nymph_stone"]
+    hair = materials["nymph_hair"]
+    navy = materials["navy_paint"]  # paint role -> French blue at runtime
+    foam = materials["nymph_foam"]
+    gold = materials["gilt_bronze"]
+    lean = math.radians(-38.0)  # forward pitch: +Y tips toward -Z (the bow)
+
+    # The hull nose runs out to z=-2.75 (last station), so the whole figure
+    # rides AHEAD of the prow under the bowsprit, like a real figurehead. The
+    # centerline bobstay is split into a V around her (see add_rigging).
+    # Wave base: a swelling mass at the prow with a BREAKING curl per side —
+    # the curl arcs up, rolls forward, and tucks back under itself, with a
+    # seafoam lip riding the whole crest (user feedback: the first pass's
+    # smooth arcs read as blobs, not water).
+    add_french_sea(materials)
+
+    # A collection of small breaking wavelets climbing from the wave base up
+    # over her gown to the waist, each rising, rolling over, and tucking back
+    # under with its own foam tip. Two big curls alone read as decoration;
+    # many fine ones read as sea.
+    body_up = Vector((0.0, 0.788, -0.6157))     # along her body, toward the head
+    body_front = Vector((0.0, -0.6157, -0.788))  # her ventral side
+    hip_anchor = Vector((0.0, 0.818, -2.878))
+    # Each wavelet is a shallow crescent WRAPPING her body (rising to a crest
+    # at its middle), not a line climbing her — stacked and staggered row to
+    # row they overlap like real wave fronts. Climbing chains of blobs was the
+    # first attempt and read as beaded rope.
+    for row in range(6):
+        h = row / 5.0
+        base = hip_anchor + body_up * (0.045 - 0.215 * h)
+        girth = 0.054 + 0.034 * h
+        stagger = 0.42 * (row % 2)
+        for j in range(3):
+            theta0 = -1.05 + 1.05 * j + stagger
+            points = []
+            for step in range(7):
+                f = step / 6.0
+                theta = theta0 + (f - 0.5) * 0.95
+                radial = Vector((math.sin(theta), 0.0, 0.0)) + body_front * math.cos(theta)
+                crest = base + radial * girth + body_up * (0.026 * math.sin(math.pi * f))
+                points.append((crest.x, crest.y, crest.z))
+            add_polyline(f"French_figurehead_wavelet_{row}_{j}", points, 0.0085, navy)
+            peak = points[3]
+            add_ellipsoid(
+                f"French_figurehead_wavelet_foam_{row}_{j}",
+                peak, (0.012, 0.008, 0.012), foam, 8, 4,
+            )
+
+    # No legs and no gown: below the hips she dissolves straight into the sea
+    # (add_french_sea builds that region out of the same strand language as the
+    # hair, so the whole carving reads as one piece). This blend mass is only
+    # here so no daylight shows between hip and water.
+    blend = add_ellipsoid("French_figurehead_hip_blend", (0, 0.742, -2.836), (0.062, 0.070, 0.062), navy, 12, 8)
+    blend.rotation_euler = (lean, 0.0, 0.0)
+
+    # Ribcage / waist / hip as three masses instead of one barrel: a single
+    # tall ellipsoid from chest to hip carried its full width through the
+    # middle, which read as a pregnant belly. The waist is deliberately the
+    # narrowest link in the chain.
+    torso = add_ellipsoid("French_figurehead_torso", (0, 0.922, -2.960), (0.056, 0.078, 0.050), skin, 12, 8)
+    torso.rotation_euler = (lean, 0.0, 0.0)
+    waist = add_ellipsoid("French_figurehead_waist", (0, 0.864, -2.914), (0.038, 0.046, 0.035), skin, 12, 8)
+    waist.rotation_euler = (lean, 0.0, 0.0)
+    hips = add_ellipsoid("French_figurehead_hips", (0, 0.814, -2.876), (0.058, 0.050, 0.052), skin, 12, 8)
+    hips.rotation_euler = (lean, 0.0, 0.0)
+    chest = add_ellipsoid("French_figurehead_shoulders", (0, 0.975, -2.990), (0.070, 0.048, 0.050), skin, 12, 6)
+    chest.rotation_euler = (lean, 0.0, 0.0)
+    # Deliberately oversized and set PROUD of the torso surface: the first pass
+    # put them at 0.755 of the torso radius, so the ellipsoid swallowed them
+    # whole. These must break the body silhouette to read female at gameplay
+    # distance — the ventral direction is local -Z, which the lean tips
+    # down-and-forward, so they carry the profile from the side too.
+    for side in (-1, 1):
+        breast = add_ellipsoid(f"French_figurehead_breast_{side}", (side * 0.036, 0.921, -3.019), (0.044, 0.042, 0.044), skin, 12, 8)
+        breast.rotation_euler = (lean, 0.0, 0.0)
+
+    # Arms swept back toward the prow, like the concept's trailing pose — the
+    # hands land on the hull nose as if she is riding the ship forward.
+    for side in (-1, 1):
+        add_spar(
+            f"French_figurehead_arm_{side}",
+            (side * 0.062, 0.960, -2.975),
+            (side * 0.080, 0.730, -2.760),
+            0.016, 0.011, skin, 8,
+        )
+
+    # Head looking out over the sea, hair FLYING back toward the ship — a
+    # crown cap plus a fan of thick undulating strands streaming aft and up
+    # (user feedback: the first pass had no visible hair or motion). The
+    # cluster sits low enough that the bowsprit shrouds pass above it.
+    # Head is deliberately oversized against the body (a caricature ratio, like
+    # a carved figurehead) so the face is a readable mass, not a knob.
+    # Head height is set by the bowsprit, not by taste: at 1.015 the posed
+    # crown came within 0.012 world of the spar underside, leaving no room for
+    # hair on top — the bun could only exist inside the spar (user feedback
+    # 2026-08-18: hair wrapped around the mast). Dropping to 0.997 buys the
+    # cap ~0.03 of daylight below the spar while the neck stays readable.
+    add_ellipsoid("French_figurehead_head", (0, 0.997, -3.035), (0.058, 0.067, 0.062), skin, 14, 10)
+    # Nose on the ventral face direction (the lean tips her face down-forward),
+    # set a touch above centre so it reads as a profile rather than a snout.
+    face = Vector((0.0, math.sin(lean), -math.cos(lean)))  # outward from the face
+    head_centre = Vector((0.0, 0.997, -3.035))
+    brow = head_centre + Vector((0.0, 0.788, -0.6157)) * 0.008
+    add_spar(
+        "French_figurehead_nose",
+        tuple(brow + face * 0.040), tuple(brow + face * 0.082),
+        0.016, 0.007, skin, 8,
+    )
+    # Low chignon hugging the skull, not an up-tipped bun: the first pass sat
+    # at (0, 1.040, -3.010) with a long +z axis pitched -24 deg, whose posed
+    # top reached y~1.316 against a spar underside of y~1.264 — the bowsprit
+    # plowed straight through the hair. Solved against the posed spar: this
+    # centre/size/tilt tops out at y~1.247, under the spar by ~0.03 while
+    # still covering the crown by ~0.008.
+    hair_cap = add_ellipsoid("French_figurehead_hair_cap", (0, 1.004, -3.030), (0.068, 0.064, 0.062), hair, 14, 10)
+    hair_cap.rotation_euler = (math.radians(-6.0), 0.0, 0.0)
+    # Under-mass stops daylight showing between strands without becoming the
+    # shape itself — the strands are what should read as hair. It must dive
+    # WITH the fan: at the first pass's -14 deg it lay nearly level, and the
+    # posed aft end drove up through the descending bowsprit and poked out
+    # above the spar — the tan mass "wrapped around the mast" in the user's
+    # 2026-08-18 screenshots. +48 deg lays its long axis along the strand
+    # fall line (48 deg below horizontal pre-pose), keeping the whole mass
+    # >=0.05 world under the spar.
+    hair_mass = add_ellipsoid("French_figurehead_hair_stream", (0, 0.865, -2.882), (0.046, 0.034, 0.118), hair, 12, 8)
+    hair_mass.rotation_euler = (math.radians(48.0), 0.0, 0.0)
+
+    # A dense fan of FINE strands in three layers. Radius 0.0072 against the
+    # arms' 0.016->0.011 taper: less than half, so hair and limbs can never be
+    # confused. They stream back and DOWN along her back — the bowsprit slopes
+    # right over her head, so upswept hair would clip it — and each strand
+    # carries its own phase so the fan never reads as one solid shell.
+    # The fall line is set by the bowsprit, not by taste: its underside drops
+    # from y~1.104 at z=-3.00 to y~0.909 at z=-2.65, faster than hair would
+    # naturally fall, so the centreline strands have to dive to stay clear.
+    # Outboard strands (|x| > the spar's 0.048 radius) pass beside it.
+    # 112 strands across four layers. Radius stays far under the arms'
+    # 0.016->0.011 taper so hair and limbs can never be confused, and the sea
+    # is built from strands of a comparable gauge so the two halves of the
+    # carving read as one material language.
+    strand_radius = 0.0060
+    z_root = -3.000
+    # The fall is steep on purpose, and it is pinched from both sides. Above:
+    # posing the carving 1.6x lifts the fan toward the bowsprit, which descends
+    # aft faster than hair naturally falls, so a gentle drop clips the spar.
+    # Below-aft: the hull nose starts at z=-2.75, and the first pass's tips
+    # (posed z~-2.68) ran straight into the bow and vanished through the deck
+    # (user feedback 2026-08-18). Solved at the longest ragged reach (1.06),
+    # every layer's posed tip now lands at z<=-2.786 — hovering just forward
+    # of the stem, over the bow wave — and the steeper dive also buys more
+    # daylight under the spar.
+    for layer, (y_root, y_tip, z_tip, spread) in enumerate((
+        (1.034, 0.754, -2.746, 1.10),   # crown: longest, widest
+        (1.016, 0.736, -2.752, 0.98),
+        (0.992, 0.712, -2.758, 0.80),
+        (0.968, 0.688, -2.770, 0.58),   # nape: shortest, tucked in
+    )):
+        for i in range(28):
+            u = (i - 13.5) / 13.5
+            phase = 0.37 * i + 1.3 * layer
+            # Ragged tip lengths stop the fan ending on one clean edge, which
+            # is what made the first dense pass read as a broom.
+            reach = 0.80 + 0.20 * math.cos(u * 1.6) + 0.06 * math.sin(phase * 2.0)
+            points = []
+            for step in range(7):
+                t = (step / 6.0) * reach
+                z = z_root + (z_tip - z_root) * t
+                # Two sines of different frequency give a travelling wave down
+                # the strand instead of a straight stick.
+                y = (
+                    y_root + (y_tip - y_root) * t
+                    + 0.006 * math.sin(math.pi * t)
+                    + 0.005 * math.sin(phase + t * 5.2)
+                )
+                x = u * 0.048 * spread * (0.60 + 0.70 * t) + 0.010 * math.sin(phase + t * 3.4)
+                points.append((x, y, z))
+            add_polyline(f"French_figurehead_hair_strand_{layer}_{i}", points, strand_radius, hair)
+    add_ellipsoid("French_figurehead_gold_star", (0.052, 1.037, -3.022), (0.014, 0.014, 0.011), gold, 8, 4)
+
+    # Blue sash wrapping the torso diagonally (the concept's flowing drape).
+    add_polyline(
+        "French_figurehead_sash",
+        [
+            (-0.050, 0.985, -2.995),
+            (-0.062, 0.920, -2.945),
+            (-0.028, 0.855, -2.895),
+            (0.038, 0.815, -2.870),
+            (0.062, 0.775, -2.840),
+        ],
+        0.022,
+        navy,
+    )
+    add_ellipsoid("French_figurehead_gold_brooch", (0, 0.955, -3.020), (0.014, 0.014, 0.011), gold, 8, 4)
+
+    # Fleur-de-lis shield below her on the front of the wave base (concept
+    # detail — a tiny gold-on-blue pop at distance, readable heraldry close
+    # up). Flat plates with a proud gold rim and slim petals — the first
+    # pass's fat beveled box and thick tubes read as putty, not metalwork.
+    # The whole assembly sits 0.018 forward of the first pass: at z~-2.87 the
+    # sea's crescent curls broke across the gold and the emblem read as
+    # underwater (user feedback 2026-08-18). Proud of the curl fronts, still
+    # rooted in the wave shoulder behind it.
+    tilt = math.radians(-24.0)
+    rim = add_tapered_box("French_figurehead_shield_rim", (0, 0.575, -2.890), 0.108, 0.146, 0.170, 0.018, gold, 0.003)
+    rim.rotation_euler = (tilt, 0.0, 0.0)
+    plate = add_tapered_box("French_figurehead_shield", (0, 0.575, -2.900), 0.090, 0.128, 0.150, 0.016, navy, 0.003)
+    plate.rotation_euler = (tilt, 0.0, 0.0)
+    add_spar("French_figurehead_fleur_center", (0, 0.524, -2.925), (0, 0.640, -2.972), 0.011, 0.0035, gold, 8)
+    add_spar("French_figurehead_fleur_point", (0, 0.524, -2.925), (0, 0.496, -2.914), 0.009, 0.003, gold, 8)
+    for side in (-1, 1):
+        # Side petals arc outward then CURL DOWN — pointing them up read as a
+        # trident, not a fleur-de-lis.
+        add_polyline(
+            f"French_figurehead_fleur_petal_{side}",
+            [
+                (side * 0.008, 0.585, -2.949),
+                (side * 0.030, 0.604, -2.959),
+                (side * 0.044, 0.586, -2.954),
+                (side * 0.046, 0.552, -2.942),
+                (side * 0.038, 0.532, -2.934),
+            ],
+            0.0065,
+            gold,
+        )
+    band = add_cube("French_figurehead_fleur_band", (0, 0.558, -2.939), (0.058, 0.012, 0.010), gold, 0.002)
+    band.rotation_euler = (tilt, 0.0, 0.0)
+
+
+def add_french_refinement(materials):
+    """Add the French pilot's graceful visual language without altering the hull."""
+    ivory = materials["ivory"]
+    blue = materials["french_blue"]
+    for side in (-1, 1):
+        rail_z = [0.88, 0.44, 0.02, -0.40, -0.82, -1.24, -1.66, -2.02]
+        curve = []
+        for z in rail_z:
+            x, y, _ = side_point(z, side, 1.0, 0.050)
+            curve.append((x, y + 0.285 + 0.040 * math.cos((z + 0.20) * 1.45), z))
+        add_polyline(f"French_grace_rail_{side}", curve, 0.018, ivory)
+        for z in (-1.50, -0.70, 0.18):
+            x, y, _ = side_point(z, side, 1.0, 0.048)
+            add_cylinder_between(f"French_rail_support_{side}_{z}", (x, y + 0.050, z), (x, y + 0.275, z), 0.012, ivory, 10)
+        add_polyline(
+            f"French_bow_flowing_rail_{side}",
+            [side_point(-1.70, side, 0.92, 0.045), side_point(-2.18, side, 0.96, 0.030), (side * 0.10, 1.03, -2.57), (side * 0.025, 1.00, -2.72)],
+            0.017,
+            ivory,
+        )
+    # Slim ornament: it is deliberately shallow so the base transom and
+    # gameplay socket locations do not change.
+    # Kept below the taffrail cap (top ~1.204): when this poked above the rail
+    # its runtime-cream recolor read as a floating white strip between the
+    # lanterns.
+    add_tapered_box("French_transom_blue_inset", (0, 1.105, 2.458), 0.68, 0.58, 0.145, 0.022, blue, 0.008)
+    # Crown arch in taffrail wood (user feedback: the ivory strip between the
+    # lanterns read as a floating white bar).
+    add_polyline("French_transom_arched_crown", [(-0.32, 1.285, 2.475), (-0.18, 1.355, 2.485), (0, 1.375, 2.490), (0.18, 1.355, 2.485), (0.32, 1.285, 2.475)], 0.016, materials["dark_wood"])
+    for side in (-1, 1):
+        add_french_stern_lantern(materials, side)
+        add_polyline(f"French_quarter_scroll_{side}", [(side * 0.48, 1.235, 2.40), (side * 0.55, 1.285, 2.32), (side * 0.51, 1.325, 2.25)], 0.014, ivory)
+    # Build the carving at authoring size, then pose the whole set as one unit.
+    # Snapshotting object names is how the pose finds its own geometry without
+    # every add_* call having to thread a list back out.
+    before = set(bpy.data.objects.keys())
+    add_french_figurehead(materials)
+    pose_french_figurehead([obj for name, obj in bpy.data.objects.items() if name not in before])
 
 
 def decorate_hull(materials):
@@ -341,13 +811,16 @@ def decorate_hull(materials):
     # Bow: swept stem, a simple gold scroll billethead (no figurehead
     # menagerie), one head rail per side, and bowsprit knees.
     add_polyline("Bow_swept_gold_stem", [(0, -0.04, -2.12), (0, 0.30, -2.34), (0, 0.62, -2.52), (0, 0.86, -2.62)], 0.026, gold)
-    add_polyline(
-        "Bow_billethead_gold_scroll",
-        [(0, 0.86, -2.62), (0, 0.93, -2.68), (0, 0.965, -2.725), (0, 0.945, -2.76), (0, 0.905, -2.745), (0, 0.90, -2.71)],
-        0.024,
-        gold,
-    )
-    add_ellipsoid("Bow_billethead_gold_boss", (0, 0.930, -2.727), (0.020, 0.026, 0.026), gold, 10, 6)
+    if FACTION_KIT != "france":
+        # The France kit replaces the billethead with the sea-nymph figurehead
+        # (add_french_figurehead), which occupies this same prow volume.
+        add_polyline(
+            "Bow_billethead_gold_scroll",
+            [(0, 0.86, -2.62), (0, 0.93, -2.68), (0, 0.965, -2.725), (0, 0.945, -2.76), (0, 0.905, -2.745), (0, 0.90, -2.71)],
+            0.024,
+            gold,
+        )
+        add_ellipsoid("Bow_billethead_gold_boss", (0, 0.930, -2.727), (0.020, 0.026, 0.026), gold, 10, 6)
     for side in (-1, 1):
         add_polyline(
             f"Bow_head_rail_{side}",
@@ -370,6 +843,8 @@ def decorate_hull(materials):
 
     add_quarterdeck(materials)
     add_transom(materials)
+    if FACTION_KIT == "france":
+        add_french_refinement(materials)
 
     # Full mast assemblies (heights above local deck match frigate_basic).
     add_mast_assembly(
@@ -507,7 +982,13 @@ def add_rigging(materials):
     add_rope_bundle("Rigging_mizzen", mizzen, 0.010, rope)
 
     bowsprit = []
-    bowsprit.append(rope_points((0, 1.28, -3.24), (0, 0.10, -2.28), 0.03))            # bobstay -> stem
+    if FACTION_KIT == "france":
+        # Doubled bobstay chains passing either side of the sea-nymph
+        # figurehead, which occupies the centerline ahead of the prow.
+        for side in (-1, 1):
+            bowsprit.append(rope_points((0, 1.28, -3.24), (side * 0.10, 0.12, -2.26), 0.03))
+    else:
+        bowsprit.append(rope_points((0, 1.28, -3.24), (0, 0.10, -2.28), 0.03))        # bobstay -> stem
     for side in (-1, 1):
         bowsprit.append(rope_points((0, 1.30, -3.28), (side * 0.26, 0.45, -2.08), 0.025))  # shroud -> hull skin
     add_rope_bundle("Rigging_bowsprit", bowsprit, 0.009, rope)
@@ -556,8 +1037,12 @@ def classify_ship_object(name):
     # contract's Sterncastle slot (same tree/names as the galleon).
     if n.startswith("transom_"):
         return "Sterncastle"
-    if n.startswith(("quarterdeck_bulwark_cap_rail", "quarterdeck_bulwark_gold_deckline")):
+    if n.startswith(("quarterdeck_bulwark_cap_rail", "quarterdeck_bulwark_gold_deckline", "french_grace_rail", "french_rail_support", "french_bow_flowing_rail")):
         return "Railings"
+    if n.startswith(("french_transom_", "french_stern_", "french_quarter_")):
+        return "Sterncastle"
+    if n.startswith("french_figurehead_"):
+        return "HullMesh"
     if n.startswith(("bow_head_rail",)):
         return "Railings"
     common = classify_common(n, MAST_ASSEMBLIES)
@@ -581,6 +1066,17 @@ def organize_assemblies():
     organize_assemblies_from("Frigate", ASSEMBLY_TREE, assembly_locations, classify_ship_object)
 
 
+def lantern_glass_mat():
+    # Warm glass with a gentle baked emission: glTF carries the emissive
+    # factor, so the lanterns hold a soft glow in Godot without any runtime
+    # light nodes.
+    material = mat("french lantern warm glass", (0.88, 0.58, 0.22, 1), 0.35)
+    bsdf = material.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Emission Color"].default_value = (0.95, 0.58, 0.18, 1)
+    bsdf.inputs["Emission Strength"].default_value = 0.45
+    return material
+
+
 def build_materials():
     return {
         # Near-black hull oak: the "built in a hurry to catch something" ship.
@@ -591,6 +1087,23 @@ def build_materials():
         # Oxblood stays for gunport reveals only (kit gunports read materials["red_paint"]).
         "red_paint": paint_mat("dark oxblood port reveal", (0.30, 0.045, 0.035, 1), (0.40, 0.075, 0.055, 1), (0.16, 0.020, 0.016, 1)),
         "gold": gold_mat("restrained aged gold trim"),
+        "ivory": mat("french ivory ornament", (0.86, 0.82, 0.70, 1), 0.62),
+        "french_blue": paint_mat("french blue ornament", (0.08, 0.19, 0.48, 1), (0.12, 0.28, 0.62, 1), (0.04, 0.08, 0.22, 1)),
+        # Sea-nymph figurehead + lantern palette (France kit only). These names
+        # must stay OUT of ShipVisualBuilder.LIVERY_MATERIAL_ROLES: France's
+        # livery recolors the "trim" role to ivory-cream, which would erase the
+        # figurehead's true-gold accents, and its "accent" role turns blue to
+        # cream. The nymph's blues use navy_paint (paint role -> French blue at
+        # runtime); everything below keeps its baked color.
+        "nymph_stone": mat("nymph carved sandstone", (0.588, 0.520, 0.412, 1), 0.68),
+        # Honey-gold, deliberately lighter and warmer than the deck wood, hull
+        # timber, and tarred rope it sits among — at strand thickness a mid
+        # brown was indistinguishable from the bowsprit rigging behind her.
+        "nymph_hair": mat("nymph flowing hair", (0.520, 0.330, 0.120, 1), 0.56),
+        "nymph_foam": mat("nymph seafoam crest", (0.512, 0.652, 0.612, 1), 0.62),
+        "gilt_bronze": gold_mat("french gilt bronze accent"),
+        "copper": mat("french lantern copper", (0.620, 0.340, 0.140, 1), 0.42, 0.55),
+        "lantern_glass": lantern_glass_mat(),
         "black": mat("visible warm shadow black", (0.035, 0.027, 0.020, 1), 0.82),
         # Neutral/whitish so ShipVisualBuilder's per-faction tint reads (ADR 0010).
         "sail": mat("neutral sail canvas", (0.91, 0.88, 0.80, 1), 0.90),

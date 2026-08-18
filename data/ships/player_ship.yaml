@@ -1,6 +1,6 @@
 player_ship:
   ship_type: frigate
-  faction: pirates
+  faction: france
   visual_variant: worn
   sail_set: full
   crew: 70
@@ -9,10 +9,6 @@ player_ship:
   broadsides:
     port:
       cannons:
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
         - long_12_pounder
         - long_12_pounder
         - long_12_pounder
@@ -29,7 +25,4 @@ player_ship:
         - long_12_pounder
         - long_12_pounder
         - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
-        - long_12_pounder
+

@@ -1,0 +1,65 @@
+# Global duel tuning. One active record (`default`); callers may name another
+# record later for a different flavour of fight (a drunken tavern brawl could
+# run longer windups and softer damage without touching code).
+#
+# Timings are seconds and are multiplied by the fighter's weapon multipliers.
+# The readable-tell rule: windup is the whole game, so it should always be long
+# enough to see and answer, and shortening it is the main difficulty lever.
+#
+# evade_active must stay comfortably wider than the gap between a quick and a
+# slow human answer to a tell, or reacting FAST punishes you — the evasion
+# expires before the blow arrives (caught on the bench 2026-08-17, window was
+# 0.34s against a 0.58s wind-up). The skill lives in picking the right height,
+# not in pressing at the perfect instant; only pressing *before* the tell
+# should whiff.
+duel_rules:
+  - id: default
+    name: Standard Duel
+    player_vigor: 100
+    timing:
+      opening_delay: 1.1
+      attack_windup: 0.58
+      attack_recovery: 0.42
+      countered_recovery_multiplier: 2.1
+      evade_startup: 0.05
+      evade_active: 0.5
+      evade_recovery: 0.26
+      stagger_duration: 0.5
+      taunt_duration: 0.55
+      taunt_recovery: 0.6
+      pistol_draw: 0.62
+      pistol_recovery: 0.75
+      yield_duration: 1.6
+    damage:
+      chop: 14
+      thrust: 11
+      slash: 12
+      pistol: 26
+      interrupt_multiplier: 1.5
+      riposte_multiplier: 1.7
+      wrong_evade_multiplier: 1.25
+    taunt:
+      duration: 4.0
+      windup_penalty: 0.22
+      read_penalty: 0.25
+    # Supporting forces: the fight happening around the two duellists. The duel
+    # itself stays context-free and never learns what they are — boarding fills
+    # them with crew, a tavern brawl passes none at all and nothing changes.
+    #
+    # Attrition is Lanchester-flavoured: each side kills at a rate proportional
+    # to its OWN numbers, so an advantage compounds and 2-to-1 is decisive. That
+    # is what makes softening a crew with grape shot matter before you board.
+    #
+    #   base_kill_rate  men killed per second, per man, at parity
+    #   hit_burst       men who fall immediately when their captain is hit —
+    #                   the visible jump that ties the duel to the melee
+    #   surge_gain      rate bonus a side gets when its captain lands a blow
+    #   surge_decay     how fast that bonus bleeds back to normal, per second
+    #   surge_max       ceiling, so good fencing buys time but cannot rewrite
+    #                   a hopeless numbers gap
+    support:
+      base_kill_rate: 0.012
+      hit_burst: 1.2
+      surge_gain: 0.5
+      surge_decay: 0.4
+      surge_max: 2.0

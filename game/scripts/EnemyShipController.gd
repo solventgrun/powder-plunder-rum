@@ -17,6 +17,10 @@ const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
 @export_range(0.0, 4.0, 0.1) var aim_commit_time: float = 0.45
 @export var ship_type_id: String = "brig"
 @export var minimum_cannon_hit_scale: float = 1.12
+# Set by BoardingController when this ship has decided to come alongside and
+# board. It stops keeping its distance and closes, which is the player's warning
+# that grapples are coming.
+var wants_to_board: bool = false
 
 @onready var sailing_model: Node = $SailingModel
 @onready var ship_visuals: Node = $VisualRoot/ShipVisualBuilder
@@ -56,7 +60,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if combat and combat.is_sunk:
+	if combat and (combat.is_sunk or combat.has_struck_colors):
 		return
 	battle_time += delta
 
@@ -81,7 +85,11 @@ func _update_ai(delta: float) -> void:
 	var distance := to_player.length()
 	var local_player := global_transform.basis.inverse() * to_player
 	var desired_direction := to_player.normalized()
-	if distance < minimum_range:
+	if wants_to_board:
+		# Boarding beats gunnery: bear down on them rather than holding the
+		# broadside standoff.
+		pass
+	elif distance < minimum_range:
 		desired_direction = -desired_direction
 	elif distance <= preferred_range:
 		var side := 1.0 if local_player.x >= 0.0 else -1.0
@@ -209,8 +217,12 @@ func get_active_cannon_limit() -> int:
 	return combat.get_active_cannon_limit()
 
 
+func get_gunnery_multiplier() -> float:
+	return combat.get_gunnery_multiplier() if combat else 1.0
+
+
 func _get(property: StringName) -> Variant:
-	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
+	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "has_struck_colors", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
 		return combat.get(property)
 	if property == "minimum_cannon_hit_scale":
 		return minimum_cannon_hit_scale
@@ -218,7 +230,7 @@ func _get(property: StringName) -> Variant:
 
 
 func _set(property: StringName, value: Variant) -> bool:
-	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
+	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "has_struck_colors", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
 		combat.set(property, value)
 		return true
 	return false

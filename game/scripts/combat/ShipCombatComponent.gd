@@ -2,6 +2,7 @@ extends Node
 class_name ShipCombatComponent
 
 const ContentCatalog := preload("res://game/scripts/content/ContentCatalog.gd")
+const GameDifficultyScript := preload("res://game/scripts/content/GameDifficulty.gd")
 const MagazineExplosionScene := preload("res://game/scenes/MagazineExplosion.tscn")
 
 const NON_BURNING_DIRECT_MAGAZINE_EXPLOSION_MULTIPLIER := 0.25
@@ -9,6 +10,7 @@ const CREW_PER_CANNON := 3.0
 
 signal sunk
 signal mast_broken
+signal struck_colors
 
 var max_hull: float = 80.0
 var max_sail: float = 80.0
@@ -18,10 +20,19 @@ var hull: float = 80.0
 var sail: float = 80.0
 var crew: float = 80.0
 var morale: float = 100.0
+# How far into the rum this crew is, 0-100. Raised by issuing a ration at the
+# after-action screen, shed between battles. It buys morale and costs gunnery,
+# which is the whole trade — and it is the state a Republic of Rum event will
+# one day be watching.
+var drunkenness: float = 0.0
 var magazine_explosion_multiplier: float = 1.0
 var is_sunk: bool = false
 var is_burning: bool = false
 var is_mast_broken: bool = false
+# Set when a boarding action decides the ship: a captured prize, or the player's
+# own vessel giving up after the captain is cut down. Distinct from sinking —
+# the hull is intact and someone now owns it.
+var has_struck_colors: bool = false
 var burning_time_remaining: float = 0.0
 var burning_hull_damage_per_second: float = 0.0
 var burning_magazine_explosion_chance_per_second: float = 0.0
@@ -63,8 +74,45 @@ func configure(stats: Resource, loadout: Dictionary, visuals: Node, name_overrid
 	is_sunk = false
 	is_burning = false
 	is_mast_broken = false
+	has_struck_colors = false
 	disabled_cannons = {"port": 0, "starboard": 0}
 	disabled_gun_ports = {"port": 0, "starboard": 0}
+
+
+# Seeds a ship with the state she ended her last battle in. Without this every
+# ship sails fresh out of her YAML record, and nothing a battle does to a hull
+# survives it — which is the whole of post-battle consequences.
+#
+# Hull and sail come in as fractions so they survive retuning a ship type's
+# maxima or bolting a reinforced hull onto her; crew and morale are counts.
+func apply_condition(condition: Dictionary) -> void:
+	if condition.is_empty():
+		return
+	hull = clampf(float(condition.get("hull_fraction", 1.0)), 0.0, 1.0) * max_hull
+	sail = clampf(float(condition.get("sail_fraction", 1.0)), 0.0, 1.0) * max_sail
+	morale = clampf(float(condition.get("morale", max_morale)), 0.0, max_morale)
+	drunkenness = clampf(float(condition.get("drunkenness", 0.0)), 0.0, 100.0)
+	is_mast_broken = bool(condition.get("mast_broken", false))
+	var disabled: Dictionary = condition.get("disabled_cannons", {})
+	disabled_cannons = {"port": int(disabled.get("port", 0)), "starboard": int(disabled.get("starboard", 0))}
+	var ports: Dictionary = condition.get("disabled_gun_ports", {})
+	disabled_gun_ports = {"port": int(ports.get("port", 0)), "starboard": int(ports.get("starboard", 0))}
+	if is_mast_broken and visual_node and visual_node.has_method("set_mast_broken"):
+		visual_node.call("set_mast_broken", true)
+
+
+# The mirror of apply_condition: what this ship is carrying away from the fight.
+func export_condition() -> Dictionary:
+	return {
+		"hull_fraction": hull / maxf(max_hull, 0.01),
+		"sail_fraction": sail / maxf(max_sail, 0.01),
+		"crew": crew,
+		"morale": morale,
+		"drunkenness": drunkenness,
+		"mast_broken": is_mast_broken,
+		"disabled_cannons": disabled_cannons.duplicate(),
+		"disabled_gun_ports": disabled_gun_ports.duplicate()
+	}
 
 
 func update_status(delta: float) -> void:
@@ -131,6 +179,21 @@ func apply_morale_damage(amount: float) -> void:
 	if is_sunk:
 		return
 	morale = maxf(0.0, morale - amount)
+	_check_surrender()
+
+
+# A crew with nothing left in them stops fighting. This is the surrender that
+# Milestone 2 deferred, and it cuts both ways: grape shot can break an enemy
+# into striking without ever boarding her, and your own people can give up on
+# you. `surrender_threshold: 0` in the difficulty file turns it off.
+func _check_surrender() -> void:
+	if is_sunk or has_struck_colors:
+		return
+	var threshold := GameDifficultyScript.value("morale", "surrender_threshold", 8.0)
+	if threshold <= 0.0 or morale > threshold:
+		return
+	print("%s has no fight left and strikes her colours." % display_name)
+	strike_colors()
 
 
 func apply_status_effects(status_effects: Dictionary) -> void:
@@ -150,6 +213,19 @@ func apply_status_effects(status_effects: Dictionary) -> void:
 		var chance := base_chance * magazine_explosion_multiplier
 		if randf() <= chance:
 			_explode()
+
+
+# The ship gives up the fight without going down: she is taken. Called by the
+# boarding layer once a duel decides who owns this deck.
+func strike_colors() -> void:
+	if is_sunk or has_struck_colors:
+		return
+	has_struck_colors = true
+	var owner_3d := get_parent() as Node3D
+	if owner_3d and owner_3d is CharacterBody3D:
+		(owner_3d as CharacterBody3D).velocity = Vector3.ZERO
+	print("%s strikes her colours." % display_name)
+	struck_colors.emit()
 
 
 func break_mast() -> void:
@@ -196,7 +272,22 @@ func get_movement_power() -> float:
 func get_active_cannon_limit() -> int:
 	if is_sunk:
 		return 0
-	return int(floor(crew / CREW_PER_CANNON))
+	return int(floor(crew / CREW_PER_CANNON * get_gunnery_multiplier()))
+
+
+# How well this crew is working the guns, as a fraction of a willing sober one.
+# Two things drag on it: a crew with no heart left in them, and a crew that has
+# been at the rum. Both scale by difficulty (`morale` section) so the whole
+# effect can be turned off for a gentler game.
+#
+# This is what makes morale worth spending rum on — before this it was a number
+# that only the enemy's boarding odds ever read.
+func get_gunnery_multiplier() -> float:
+	var tuning := GameDifficultyScript.section("morale")
+	var floor_rate := float(tuning.get("gunnery_floor", 0.7))
+	var morale_scale := lerpf(floor_rate, 1.0, clampf(get_morale_fraction(), 0.0, 1.0))
+	var drunk_penalty := float(tuning.get("drunk_gunnery_penalty", 0.2)) * clampf(drunkenness / 100.0, 0.0, 1.0)
+	return clampf(morale_scale - drunk_penalty, 0.05, 1.0)
 
 
 func get_disabled_cannon_count(side: int) -> int:

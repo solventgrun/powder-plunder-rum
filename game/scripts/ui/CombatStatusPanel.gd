@@ -22,7 +22,9 @@ func _draw() -> void:
 		return
 
 	# Player status only: enemy strength stays a mystery (user call 2026-08-14).
-	var panel_position := Vector2(size.x - 258.0, 166.0)
+	# Left side under the compass with clear air between them (compass box ends
+	# at y 146); the debug column owns the right (2026-08-17).
+	var panel_position := Vector2(38.0, 192.0)
 	var ship_name := "Your Ship"
 	var stats: Resource = player.get("ship_stats")
 	if stats:
@@ -38,8 +40,14 @@ func _draw() -> void:
 	if bool(player.get("is_sunk")):
 		notice = "YOUR VESSEL WAS SUNK"
 		notice_color = Color(0.9, 0.2, 0.14, 0.98)
+	elif bool(player.get("has_struck_colors")):
+		notice = "YOU ARE CUT DOWN - SHE IS THEIRS"
+		notice_color = Color(0.9, 0.2, 0.14, 0.98)
 	elif bool(target.get("is_sunk")):
 		notice = "ENEMY VESSEL SUNK"
+		notice_color = Color(0.95, 0.8, 0.3, 0.98)
+	elif bool(target.get("has_struck_colors")):
+		notice = "SHE STRIKES HER COLOURS"
 		notice_color = Color(0.95, 0.8, 0.3, 0.98)
 	elif bool(player.get("is_mast_broken")):
 		notice = "MAST BROKEN"

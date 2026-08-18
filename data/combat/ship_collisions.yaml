@@ -1,0 +1,32 @@
+# What happens when two hulls meet. Ships already stopped each other
+# physically; until now that was all that happened (playtest 2026-08-17).
+#
+# The speed threshold is what makes this coexist with boarding: coming
+# alongside at a matched pace is a harmless bump, which is exactly the approach
+# boarding asks for. Driving a bow into someone's beam is a ram.
+#
+#   minimum_impact_speed  below this, hulls just touch and nothing is hurt
+#   hull_damage_per_speed damage per unit of closing speed above the threshold
+#   crew_damage_per_speed men thrown down by the shock, same scale
+#   sail_damage_per_speed rigging fouled when yards tangle
+#   mass_influence        how much the size difference matters, 0 = not at all.
+#                         The smaller ship always comes off worse.
+#   cooldown              seconds before the same pair can be hurt again, so
+#                         grinding along a hull is not instant death
+#   shake / foam          feedback scale for the camera and the water
+ship_collision_rules:
+  - id: default
+    name: Hull Collision
+    minimum_impact_speed: 1.6
+    maximum_impact_speed: 6.0
+    hull_damage_per_speed: 3.0
+    crew_damage_per_speed: 0.8
+    sail_damage_per_speed: 1.2
+    # Kept well below 1.0 on purpose. At full influence the mass ratio between a
+    # sloop and a galleon is 4.5x, which took a sloop from full hull to sunk in
+    # a single graze (measured 2026-08-17). Ramming a bigger ship should be a
+    # bad idea, not an instant death sentence.
+    mass_influence: 0.6
+    cooldown: 1.1
+    shake: 1.0
+    foam: 1.0

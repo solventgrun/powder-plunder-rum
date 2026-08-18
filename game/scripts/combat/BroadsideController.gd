@@ -253,7 +253,16 @@ func _get_side_reload_time(side: int) -> float:
 	var reload_time := 0.0
 	for cannon in _get_side_firing_cannons(side):
 		reload_time = maxf(reload_time, float(cannon.get("reload_time")))
-	return reload_time
+	# A dispirited or drunk crew is slower at the guns as well as fewer on them,
+	# so morale is felt every broadside rather than only when boarding.
+	return reload_time / maxf(_get_parent_gunnery_multiplier(), 0.05)
+
+
+func _get_parent_gunnery_multiplier() -> float:
+	var parent := get_parent()
+	if parent and parent.has_method("get_gunnery_multiplier"):
+		return float(parent.call("get_gunnery_multiplier"))
+	return 1.0
 
 
 func _get_side_weight(side: int) -> float:

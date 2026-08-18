@@ -12,13 +12,16 @@ DISABLED: the model is authored Y-up / -Z-forward inside Blender, which
 already matches the glTF convention.
 """
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
 import bpy
 
 HERE = Path(__file__).resolve().parent
-GLB_PATH = HERE.parent.parent / "assets" / "models" / "frigate.glb"
+KIT = os.environ.get("FRIGATE_KIT", "base")
+GLB_NAME = "frigate_france.glb" if KIT == "france" else "frigate.glb"
+GLB_PATH = HERE.parent.parent / "assets" / "models" / GLB_NAME
 
 sys.path.insert(0, str(HERE.parent))
 

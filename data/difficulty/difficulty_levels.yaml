@@ -1,0 +1,172 @@
+# Game-wide difficulty levels.
+#
+# Difficulty is chosen ONCE, when a new game is created (user call 2026-08-17),
+# and is never a per-encounter choice. Every system that wants to be harder or
+# gentler reads its own section from the level the player picked.
+#
+# Structure: one record per level, then one nested section per consuming system.
+#
+#   difficulty_levels:
+#     - id: normal
+#       name: Buccaneer
+#       duel:        <- sword fights (the only consumer today)
+#       naval:       <- naval combat, when it wants a difficulty axis
+#       land:        <- land battles, once they exist
+#       overworld:   <- spawn rates, patrol density, pursuit willingness
+#
+# Sections are added when the system that consumes them is built — not
+# speculatively — so read this file as "what is currently tuned", not as the
+# full eventual schema. A new consumer adds its section to every level here and
+# reads it with `GameDifficulty.section("<system>")`; nothing else changes.
+#
+# `normal` is the tuning target and must exist. Levels are stretched from it in
+# both directions.
+#
+# Duel section fields. The pacing ones matter far more to how hard a fight
+# feels than any stat:
+#   attack_pause_slow  gap between voluntary attacks for a passive fighter
+#   attack_pause_fast  the same gap for a maximally aggressive one
+#                      (the fighter's own aggression picks a point between)
+#   punish_chance      how often a free opening — your recovery, your stagger —
+#                      is actually taken; at 1.0 every mistake is punished the
+#                      instant you make it, which reads as relentless
+#   punish_delay       how long the opponent waits before taking one. This is
+#                      the fairness knob: too short and the next wind-up starts
+#                      while you are still staggered, so you never get to read
+#                      the tell you are being asked to answer.
+#
+# Boarding section fields:
+#   enemy_boarding_chance   likelihood an enemy takes a boarding opportunity
+#                           against you. At 0 they never board; at 1 any chance
+#                           they get, they take.
+#   enemy_crew_advantage    the crew ratio they want over you before trying it.
+#                           Above 1 they only board when they outnumber you.
+#   defender_strength_multiplier  how well whoever is defending their own deck
+#                           fights, applied on top of boarding.yaml.
+#
+# Morale section fields. Morale used to be decorative; it now decides how well
+# the guns are worked, whether the crew fights on, and whether they stay at all:
+#   gunnery_floor         how slowly a broken crew works the guns, as a fraction
+#                         of a willing crew's rate. At 1.0 morale does not touch
+#                         gunnery at all.
+#   surrender_threshold   the morale at which the crew strikes YOUR colours and
+#                         ends the battle. 0 disables it — the crew will die at
+#                         the guns before giving up.
+#   desertion_per_battle  the share of a joyless crew that slips away between
+#                         battles. Scales with how low morale is, so a happy
+#                         ship loses nobody.
+#   drunk_gunnery_penalty how much a fully drunk crew fumbles the guns, on top
+#                         of morale. This is the price of the rum ration.
+#   sober_up_per_battle   drunkenness shed between battles.
+#
+# Post-battle section fields:
+#   salvage_fraction      how much of a SUNK ship's hold floats long enough to
+#                         be fished out. The gap between this and 1.0 is what
+#                         makes boarding her worth more than sinking her.
+difficulty_levels:
+  - id: easy
+    name: Deck Hand
+    duel:
+      vigor_multiplier: 0.7
+      reaction_time_multiplier: 1.6
+      read_accuracy_multiplier: 0.55
+      aggression_multiplier: 0.55
+      feint_chance_multiplier: 0.4
+      pistol_discipline_multiplier: 0.6
+      attack_pause_slow: 3.6
+      attack_pause_fast: 2.2
+      punish_chance: 0.2
+      punish_delay: 0.8
+    boarding:
+      enemy_boarding_chance: 0.15
+      enemy_crew_advantage: 1.7
+      defender_strength_multiplier: 0.9
+
+    morale:
+      gunnery_floor: 0.85
+      surrender_threshold: 0.0
+      desertion_per_battle: 0.0
+      drunk_gunnery_penalty: 0.1
+      sober_up_per_battle: 60
+    post_battle:
+      salvage_fraction: 0.4
+
+  - id: normal
+    name: Buccaneer
+    duel:
+      vigor_multiplier: 0.9
+      reaction_time_multiplier: 1.25
+      read_accuracy_multiplier: 0.8
+      aggression_multiplier: 0.75
+      feint_chance_multiplier: 0.75
+      pistol_discipline_multiplier: 0.85
+      attack_pause_slow: 2.5
+      attack_pause_fast: 1.45
+      punish_chance: 0.4
+      punish_delay: 0.45
+    boarding:
+      enemy_boarding_chance: 0.4
+      enemy_crew_advantage: 1.25
+      defender_strength_multiplier: 1.0
+
+    morale:
+      gunnery_floor: 0.7
+      surrender_threshold: 8.0
+      desertion_per_battle: 0.04
+      drunk_gunnery_penalty: 0.2
+      sober_up_per_battle: 40
+    post_battle:
+      salvage_fraction: 0.25
+
+  - id: hard
+    name: Sea Wolf
+    duel:
+      vigor_multiplier: 1.0
+      reaction_time_multiplier: 1.0
+      read_accuracy_multiplier: 1.0
+      aggression_multiplier: 1.0
+      feint_chance_multiplier: 1.0
+      pistol_discipline_multiplier: 1.0
+      attack_pause_slow: 1.9
+      attack_pause_fast: 0.95
+      punish_chance: 0.75
+      punish_delay: 0.15
+    boarding:
+      enemy_boarding_chance: 0.7
+      enemy_crew_advantage: 1.0
+      defender_strength_multiplier: 1.1
+
+    morale:
+      gunnery_floor: 0.55
+      surrender_threshold: 14.0
+      desertion_per_battle: 0.07
+      drunk_gunnery_penalty: 0.3
+      sober_up_per_battle: 30
+    post_battle:
+      salvage_fraction: 0.18
+
+  - id: brutal
+    name: Dread Captain
+    duel:
+      vigor_multiplier: 1.15
+      reaction_time_multiplier: 0.8
+      read_accuracy_multiplier: 1.15
+      aggression_multiplier: 1.15
+      feint_chance_multiplier: 1.25
+      pistol_discipline_multiplier: 1.1
+      attack_pause_slow: 1.4
+      attack_pause_fast: 0.6
+      punish_chance: 1.0
+      punish_delay: 0.0
+    boarding:
+      enemy_boarding_chance: 1.0
+      enemy_crew_advantage: 0.8
+      defender_strength_multiplier: 1.2
+    morale:
+      gunnery_floor: 0.4
+      surrender_threshold: 20.0
+      desertion_per_battle: 0.11
+      drunk_gunnery_penalty: 0.4
+      sober_up_per_battle: 20
+    post_battle:
+      salvage_fraction: 0.12

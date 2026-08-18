@@ -15,6 +15,7 @@ brass only on the stem cap and ensign truck.
 Env knobs for iteration:
   BRIG_STAGE   hull | full   (default full)
   BRIG_QUALITY draft | final (default final)
+  BRIG_KIT     base | dutch (default base)
 """
 import math
 import os
@@ -62,6 +63,7 @@ OUT_DIR = Path(__file__).resolve().parent
 
 STAGE = os.environ.get("BRIG_STAGE", "full")
 QUALITY = os.environ.get("BRIG_QUALITY", "final")
+FACTION_KIT = os.environ.get("BRIG_KIT", "base")
 
 
 def station_profile():
@@ -279,6 +281,96 @@ def add_transom(materials):
     add_ellipsoid("Transom_ensign_staff_brass_truck", (0, 1.472, 2.245), (0.013, 0.017, 0.013), brass, 8, 4)
 
 
+def add_hoop(name, loc, major_radius, minor_radius, material):
+    # Ring around the barrel body, not a rod through it — axis rotated onto Y
+    # (the deck's up axis) so it wraps the stave silhouette like an iron band.
+    bpy.ops.mesh.primitive_torus_add(
+        location=loc, major_radius=major_radius, minor_radius=minor_radius,
+        major_segments=12, minor_segments=6,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+    if material:
+        obj.data.materials.append(material)
+    obj.modifiers.new("weighted normals", "WEIGHTED_NORMAL")
+    return obj
+
+
+def add_dutch_barrel(name, x, z, cargo, dark_mat):
+    # A short straight-sided cylinder body (the bulk of a real barrel's
+    # height) with a brief taper to each rim reads as a barrel; the prior
+    # rim-to-belly-to-rim taper over the FULL height had no straight run and
+    # came out lens/egg-shaped. Dark stave lines and hoop bands are separate
+    # dark_mat geometry — wood_mat's procedural grain doesn't survive glTF
+    # export (ADR 0010), so the "wood lines" have to be modeled, not shaded.
+    height = 0.30
+    taper_frac = 0.22
+    r_rim = 0.082
+    r_body = 0.115
+    n_staves = 8
+    y_bottom = mast_deck_y(z)
+    y_taper1 = y_bottom + height * taper_frac
+    y_taper2 = y_bottom + height * (1.0 - taper_frac)
+    y_top = y_bottom + height
+
+    add_spar(f"{name}_lower_taper", (x, y_bottom, z), (x, y_taper1, z), r_rim, r_body, cargo, 10)
+    add_cylinder_between(f"{name}_body", (x, y_taper1, z), (x, y_taper2, z), r_body, cargo, 10)
+    add_spar(f"{name}_upper_taper", (x, y_taper2, z), (x, y_top, z), r_body, r_rim, cargo, 10)
+
+    def radius_at(frac):
+        if frac <= taper_frac:
+            return r_rim + (r_body - r_rim) * (frac / taper_frac)
+        if frac >= 1.0 - taper_frac:
+            return r_rim + (r_body - r_rim) * ((1.0 - frac) / taper_frac)
+        return r_body
+
+    for frac in (0.09, 0.19, 0.81, 0.91):
+        hy = y_bottom + height * frac
+        hr = radius_at(frac) * 1.10
+        add_hoop(f"{name}_hoop_{frac:.2f}", (x, hy, z), hr, 0.010, dark_mat)
+
+    for i in range(n_staves):
+        angle = (2.0 * math.pi * i) / n_staves
+        sx = math.cos(angle) * r_body * 1.01
+        sz = math.sin(angle) * r_body * 1.01
+        add_cylinder_between(f"{name}_stave_{i}", (x + sx, y_taper1, z + sz), (x + sx, y_taper2, z + sz), 0.0055, dark_mat, 6)
+
+
+def add_dutch_commerce_dressing(materials):
+    """Give the Dutch pilot a broad commerce read without changing hull dimensions."""
+    wood = materials["wood"]
+    dark = materials["dark_wood"]
+    rope = materials["rope"]
+    cargo = materials["cargo_wood"]
+    for side in (-1, 1):
+        for z in (-0.86, -0.12, 0.62):
+            x, y, _ = side_point(z, side, 0.985, 0.055)
+            add_cylinder_between(f"Dutch_loading_beam_{side}_{z}", (x, y + 0.085, z), (x + side * 0.20, y + 0.095, z), 0.018, dark, 10)
+        rail = []
+        for z in (1.35, 0.86, 0.36, -0.16, -0.66):
+            x, y, _ = side_point(z, side, 1.0, 0.055)
+            rail.append((x, y + 0.215, z))
+        add_polyline(f"Dutch_broad_work_rail_{side}", rail, 0.024, dark)
+
+    # Centerline cargo stays clear of guns and sail roots, but remains large
+    # enough to resolve as freight from the gameplay camera.
+    for i, (x, z) in enumerate(((-0.30, -0.30), (0.00, -0.56), (0.30, -0.30), (-0.24, 0.52), (0.24, 0.52))):
+        add_dutch_barrel(f"Dutch_cargo_barrel_{i}", x, z, cargo, dark)
+    for i, (x, z) in enumerate(((-0.36, 0.90), (0.36, 0.90))):
+        y = mast_deck_y(z) + 0.090
+        add_cube(f"Dutch_cargo_crate_{i}", (x, y, z), (0.22, 0.16, 0.20), cargo, 0.010)
+        add_polyline(f"Dutch_cargo_crate_lash_{i}", [(x - 0.13, y + 0.09, z - 0.12), (x + 0.13, y + 0.09, z + 0.12)], 0.009, rope)
+        add_polyline(f"Dutch_cargo_crate_crosslash_{i}", [(x - 0.13, y + 0.09, z + 0.12), (x + 0.13, y + 0.09, z - 0.12)], 0.009, rope)
+    for side in (-1, 1):
+        add_rope_bundle(
+            f"Dutch_cargo_net_{side}",
+            [rope_points((side * 0.56, 0.80, 0.66), (side * 0.72, 0.62, 0.18), 0.06), rope_points((side * 0.56, 0.80, 0.28), (side * 0.72, 0.62, 0.70), 0.06)],
+            0.008,
+            rope,
+        )
+
+
 def decorate_hull(materials):
     wood = materials["wood"]
     dark = materials["dark_wood"]
@@ -370,6 +462,8 @@ def decorate_hull(materials):
 
     add_halfdeck(materials)
     add_transom(materials)
+    if FACTION_KIT == "dutch":
+        add_dutch_commerce_dressing(materials)
 
     # Two masts only — the class signature. Square-rigged foremast; the main
     # is a bare kit pole (no square yards) carrying ship-side boom and gaff.
@@ -558,6 +652,10 @@ def classify_ship_object(name):
         return "Railings"
     if n.startswith("halfdeck_"):
         return "Deck"
+    if n.startswith(("dutch_cargo_", "dutch_loading_beam_")):
+        return "Deck"
+    if n.startswith("dutch_broad_work_rail_"):
+        return "Railings"
     common = classify_common(n, MAST_ASSEMBLIES)
     if common is not None:
         return common
@@ -595,6 +693,11 @@ def build_materials():
         "gold": mat("blackened iron fittings", (0.070, 0.062, 0.055, 1), 0.55, 0.62),
         # The entire true-gold budget: stem cap + ensign truck.
         "brass": gold_mat("single worn brass accent"),
+        # Darker than the deck/hull wood so the cargo doesn't wash out against
+        # the planking; wood_mat's base color is what actually exports to the
+        # GLB (its procedural grain doesn't survive glTF, per ADR 0010) — the
+        # stave/hoop lines are separate dark_mat geometry, not shading.
+        "cargo_wood": wood_mat("dutch cargo weathered oak", (0.150, 0.098, 0.055, 1), (0.230, 0.155, 0.085, 1), (0.045, 0.028, 0.015, 1)),
         "black": mat("visible warm shadow black", (0.035, 0.027, 0.020, 1), 0.82),
         # Neutral/whitish so ShipVisualBuilder's per-faction tint reads (ADR 0010).
         "sail": mat("neutral sail canvas", (0.91, 0.88, 0.80, 1), 0.90),

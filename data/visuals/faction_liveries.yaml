@@ -1,0 +1,54 @@
+# Faction livery palettes (Phase 1 of the Faction Livery Kits backlog entry).
+# Colors are hex html; roles map onto GLB material slots via
+# ShipVisualBuilder.LIVERY_MATERIAL_ROLES:
+#   paint     - the ship's painted band/castle surfaces (the "ownable color")
+#   accent    - secondary painted surfaces (bulwark/stern panels)
+#   hull_wood - hull timber stain (NOT deck planking; class decks stay)
+#   trim      - gold/gilt ornament budget
+#   streamer  - masthead streamer cloth
+#   sails     - canvas tint (feeds the existing sail tint path)
+# Pirates read as the absence of polish (2026-08-17): tarred timber, a dark
+# oxblood band, blackened iron where the nations wear gold, blood-red
+# streamers, and darker canvas than any nation — the strongest silhouette cue.
+# The class-brief schemes remain the fallback for records with no/unknown
+# faction.
+liveries:
+  - id: spain
+    paint: "8f1a10"
+    accent: "9a641c"
+    hull_wood: "31180a"
+    trim: "d9a12e"
+    streamer: "e3b41f"
+    sails: "efe3c0"
+
+  - id: england
+    paint: "a97f2a"
+    accent: "15120f"
+    hull_wood: "17130f"
+    trim: "b3b0a3"
+    streamer: "d8d4c6"
+    sails: "dfdfd6"
+
+  - id: france
+    paint: "2b5ab0"
+    accent: "e9dfc4"
+    hull_wood: "4a3218"
+    trim: "eadfc2"
+    streamer: "cfdcf2"
+    sails: "f8f5e9"
+
+  - id: dutch
+    paint: "d5701a"
+    accent: "c2661a"
+    hull_wood: "5a432b"
+    trim: "5a5240"
+    streamer: "dd7d20"
+    sails: "d5caad"
+
+  - id: pirates
+    paint: "5a1510"
+    accent: "241c15"
+    hull_wood: "231a12"
+    trim: "3f3831"
+    streamer: "7d1a12"
+    sails: "6f6455"

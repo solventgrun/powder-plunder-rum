@@ -43,6 +43,8 @@ ship_visual_profiles:
     hull:
       mode: mesh
       scene: res://game/scenes/BrigVisual.tscn
+      faction_scenes:
+        dutch: res://game/scenes/DutchBrigVisual.tscn
       length: 3.45
       width: 1.36
       height: 0.54
@@ -93,6 +95,8 @@ ship_visual_profiles:
     hull:
       mode: mesh
       scene: res://game/scenes/FrigateVisual.tscn
+      faction_scenes:
+        france: res://game/scenes/FrenchFrigateVisual.tscn
       length: 4.2
       width: 1.5
       height: 0.62

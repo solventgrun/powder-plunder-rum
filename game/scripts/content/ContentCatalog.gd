@@ -10,8 +10,17 @@ const PLAYER_SHIP_PATH := "res://data/ships/player_ship.yaml"
 const TARGET_SHIP_PATH := "res://data/ships/target_ship.yaml"
 const FACTIONS_PATH := "res://data/factions/factions.yaml"
 const FLAGS_PATH := "res://data/visuals/flags.yaml"
+const FACTION_LIVERIES_PATH := "res://data/visuals/faction_liveries.yaml"
 const ENVIRONMENT_CONDITIONS_PATH := "res://data/environment/environment_conditions.yaml"
 const OVERWORLD_SHIPS_PATH := "res://data/encounters/overworld_ships.yaml"
+const DUEL_WEAPONS_PATH := "res://data/duels/duel_weapons.yaml"
+const DUEL_RULES_PATH := "res://data/duels/duel_rules.yaml"
+const DUEL_PROFILES_PATH := "res://data/duels/duel_profiles.yaml"
+const DIFFICULTY_LEVELS_PATH := "res://data/difficulty/difficulty_levels.yaml"
+const CARGO_TYPES_PATH := "res://data/cargo/cargo_types.yaml"
+const CARGO_ROLES_PATH := "res://data/cargo/cargo_roles.yaml"
+const BOARDING_RULES_PATH := "res://data/combat/boarding.yaml"
+const SHIP_COLLISIONS_PATH := "res://data/combat/ship_collisions.yaml"
 const CANNON_TYPE_SCRIPT := preload("res://game/scripts/content/CannonType.gd")
 const AMMO_TYPE_SCRIPT := preload("res://game/scripts/content/AmmoType.gd")
 const SHIP_STATS_SCRIPT := preload("res://game/scripts/content/ShipStats.gd")
@@ -115,6 +124,21 @@ static func load_flag_records() -> Array[Dictionary]:
 	return _load_yaml_records(FLAGS_PATH, "flags")
 
 
+static func load_faction_livery_records() -> Array[Dictionary]:
+	return _load_yaml_records(FACTION_LIVERIES_PATH, "liveries")
+
+
+# Faction livery palettes by faction id; factions without a livery (pirates)
+# keep their ship's class scheme.
+static func load_faction_liveries() -> Dictionary:
+	var catalog := {}
+	for record in load_faction_livery_records():
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
 static func load_flags() -> Dictionary:
 	var catalog := {}
 	for record in load_flag_records():
@@ -143,8 +167,135 @@ static func load_environment_condition(condition_id: String = "default_battle") 
 
 
 static func load_overworld_ship_records() -> Array[Dictionary]:
-	return _load_overworld_ship_records(OVERWORLD_SHIPS_PATH)
-	
+	var records := _load_overworld_ship_records(OVERWORLD_SHIPS_PATH)
+	for record in records:
+		fill_cargo_manifest(record)
+	return records
+
+
+# Gives a ship a hold if she was not written one. A hand-authored `cargo:` block
+# always wins; a `cargo_role` fills the gap; a ship with neither sails in
+# ballast (or on her legacy `cargo_weight` scalar, which still weighs).
+static func fill_cargo_manifest(ship_record: Dictionary) -> void:
+	var manifest: Dictionary = ship_record.get("cargo", {})
+	if not manifest.is_empty():
+		return
+	var role_id := str(ship_record.get("cargo_role", ""))
+	if role_id.is_empty():
+		return
+	ship_record["cargo"] = generate_cargo_manifest(role_id, get_free_hold(ship_record), str(ship_record.get("id", role_id)))
+
+
+# What is left of a hull's allowance once her guns are aboard. This is the
+# number the after-action screen meters plunder against, and the reason a ship
+# crammed with cannon cannot carry a prize home.
+static func get_free_hold(ship_record: Dictionary) -> float:
+	var ship_types := load_ship_types()
+	var ship_type: Dictionary = ship_types.get(str(ship_record.get("ship_type", "")), {})
+	var combat: Dictionary = ship_type.get("combat", {})
+	var capacity := float(combat.get("usable_load_capacity", 0.0))
+	return maxf(0.0, capacity - calculate_cannon_weight(ship_record, load_cannon_types()))
+
+
+# Duel content. These loaders stay free of any battle/ship concepts so the duel
+# system can be driven from any context (boarding today, tavern or land fights
+# later) — see docs/design/boarding-duel-brief.md.
+static func load_duel_weapon_records() -> Array[Dictionary]:
+	return _load_yaml_records(DUEL_WEAPONS_PATH, "duel_weapons")
+
+
+static func load_duel_weapons() -> Dictionary:
+	return _catalog_by_id(load_duel_weapon_records())
+
+
+static func load_duel_rule_records() -> Array[Dictionary]:
+	return _load_yaml_records(DUEL_RULES_PATH, "duel_rules")
+
+
+static func load_duel_rules(rules_id: String = "default") -> Dictionary:
+	var catalog := _catalog_by_id(load_duel_rule_records())
+	return catalog.get(rules_id, catalog.get("default", {}))
+
+
+static func load_duel_profile_records() -> Array[Dictionary]:
+	return _load_yaml_records(DUEL_PROFILES_PATH, "duel_profiles")
+
+
+static func load_duel_profiles() -> Dictionary:
+	return _catalog_by_id(load_duel_profile_records())
+
+
+# Game-wide difficulty. One level is chosen at new-game creation; each system
+# reads its own section from it (see data/difficulty/difficulty_levels.yaml).
+static func load_difficulty_level_records() -> Array[Dictionary]:
+	return _load_yaml_records(DIFFICULTY_LEVELS_PATH, "difficulty_levels")
+
+
+static func load_difficulty_levels() -> Dictionary:
+	return _catalog_by_id(load_difficulty_level_records())
+
+
+static func load_difficulty_level(level_id: String = "normal") -> Dictionary:
+	var catalog := load_difficulty_levels()
+	return catalog.get(level_id, catalog.get("normal", {}))
+
+
+# A single system's tuning within a level, e.g. ("normal", "duel"). Returns an
+# empty dictionary when that system has no section yet, so a consumer added
+# before its data is written falls back to its own defaults rather than failing.
+static func load_difficulty_section(level_id: String, system_id: String) -> Dictionary:
+	var level := load_difficulty_level(level_id)
+	var section = level.get(system_id, {})
+	return section if section is Dictionary else {}
+
+
+static func load_cargo_type_records() -> Array[Dictionary]:
+	return _load_yaml_records(CARGO_TYPES_PATH, "cargo_types")
+
+
+static func load_cargo_types() -> Dictionary:
+	return _catalog_by_id(load_cargo_type_records())
+
+
+static func load_cargo_role_records() -> Array[Dictionary]:
+	return _load_yaml_records(CARGO_ROLES_PATH, "cargo_roles")
+
+
+static func load_cargo_roles() -> Dictionary:
+	return _catalog_by_id(load_cargo_role_records())
+
+
+static func load_captain_assignment_records() -> Array[Dictionary]:
+	return _load_yaml_records(DUEL_PROFILES_PATH, "captain_assignments")
+
+
+static func load_boarding_rule_records() -> Array[Dictionary]:
+	return _load_yaml_records(BOARDING_RULES_PATH, "boarding_rules")
+
+
+static func load_boarding_rules(rules_id: String = "default") -> Dictionary:
+	var catalog := _catalog_by_id(load_boarding_rule_records())
+	return catalog.get(rules_id, catalog.get("default", {}))
+
+
+static func load_ship_collision_records() -> Array[Dictionary]:
+	return _load_yaml_records(SHIP_COLLISIONS_PATH, "ship_collision_rules")
+
+
+static func load_ship_collision_rules(rules_id: String = "default") -> Dictionary:
+	var catalog := _catalog_by_id(load_ship_collision_records())
+	return catalog.get(rules_id, catalog.get("default", {}))
+
+
+static func _catalog_by_id(records: Array[Dictionary]) -> Dictionary:
+	var catalog := {}
+	for record in records:
+		var id := str(record.get("id", ""))
+		if not id.is_empty():
+			catalog[id] = record
+	return catalog
+
+
 
 static func load_fire_levels() -> Dictionary:
 	var catalog := {}
@@ -188,7 +339,7 @@ static func build_ship_stats(ship_record: Dictionary, ship_types: Dictionary, sh
 	stats.set("usable_load_capacity", float(combat.get("usable_load_capacity", 90.0)))
 	stats.set("gun_ports", int(combat.get("gun_ports", 14)))
 	stats.set("gun_ports_per_side", int(floor(float(combat.get("gun_ports", 14)) / 2.0)))
-	stats.set("cargo_weight", float(ship_record.get("cargo_weight", 0.0)))
+	stats.set("cargo_weight", resolve_cargo_weight(ship_record, load_cargo_types()))
 
 	var modification_ids: Array[String] = []
 	var modification_names: Array[String] = []
@@ -253,7 +404,7 @@ static func _apply_ship_modification(stats: Resource, modification: Dictionary) 
 static func _apply_load_adjustment(stats: Resource, ship_record: Dictionary) -> void:
 	var capacity := float(stats.get("usable_load_capacity"))
 	var cannon_weight := calculate_cannon_weight(ship_record, load_cannon_types())
-	var cargo_weight := float(ship_record.get("cargo_weight", 0.0))
+	var cargo_weight := resolve_cargo_weight(ship_record, load_cargo_types())
 	var total_weight := cannon_weight + cargo_weight
 	var load_fraction := 0.0
 	if capacity > 0.0:
@@ -283,6 +434,74 @@ static func calculate_cannon_weight(ship_record: Dictionary, cannon_types: Dicti
 			if cannon_types.has(str(cannon_id)):
 				weight += float(cannon_types[str(cannon_id)].get("weight"))
 	return weight
+
+
+# A manifest is a flat mapping of cargo id to whole units — `{"sugar": 12}` —
+# rather than a list of records, because the hold is a tally and a tally cannot
+# contain the same good twice.
+static func calculate_cargo_weight(manifest: Dictionary, cargo_types: Dictionary) -> float:
+	var weight := 0.0
+	for cargo_id in manifest:
+		var id := str(cargo_id)
+		if cargo_types.has(id):
+			weight += float(cargo_types[id].get("weight", 0.0)) * int(manifest[cargo_id])
+	return weight
+
+
+static func calculate_cargo_value(manifest: Dictionary, cargo_types: Dictionary) -> float:
+	var value := 0.0
+	for cargo_id in manifest:
+		var id := str(cargo_id)
+		if cargo_types.has(id):
+			value += float(cargo_types[id].get("value", 0.0)) * int(manifest[cargo_id])
+	return value
+
+
+# A ship's cargo weight is her manifest when she has one, and the plain
+# `cargo_weight` scalar otherwise. Keeping the scalar as a fallback means every
+# ship record written before cargo existed still loads and still weighs
+# something, and a manifest can be added to any of them one at a time.
+static func resolve_cargo_weight(ship_record: Dictionary, cargo_types: Dictionary) -> float:
+	var manifest: Dictionary = ship_record.get("cargo", {})
+	if manifest.is_empty():
+		return float(ship_record.get("cargo_weight", 0.0))
+	return calculate_cargo_weight(manifest, cargo_types)
+
+
+# Fills a hold from a role when nobody wrote the manifest out by hand. Seeded
+# from the ship's id so she always carries the same thing: a ship you plundered
+# must stay plundered, and the sea should not restock her because you left.
+static func generate_cargo_manifest(role_id: String, free_capacity: float, ship_id: String) -> Dictionary:
+	var roles := load_cargo_roles()
+	if not roles.has(role_id) or free_capacity <= 0.0:
+		return {}
+
+	var role: Dictionary = roles[role_id]
+	var shares: Dictionary = role.get("goods", {})
+	var total_share := 0.0
+	for cargo_id in shares:
+		total_share += maxf(0.0, float(shares[cargo_id]))
+	if total_share <= 0.0:
+		return {}
+
+	var cargo_types := load_cargo_types()
+	var tonnage := free_capacity * float(role.get("hold_fraction", 0.0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(ship_id)
+
+	var manifest := {}
+	for cargo_id in shares:
+		var id := str(cargo_id)
+		if not cargo_types.has(id):
+			continue
+		var unit_weight := maxf(0.01, float(cargo_types[id].get("weight", 1.0)))
+		var share_tonnage := tonnage * (float(shares[cargo_id]) / total_share)
+		# Jitter so two ships on the same role do not carry identical holds,
+		# but seeded, so this ship's hold never changes between loads.
+		var units := int(round(share_tonnage / unit_weight * rng.randf_range(0.75, 1.25)))
+		if units > 0:
+			manifest[id] = units
+	return manifest
 
 
 static func _calculate_load_speed_multiplier(load_fraction: float) -> float:
@@ -366,6 +585,7 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 		"visual_variant": "",
 		"sail_set": "full",
 		"cargo_weight": 0.0,
+		"cargo": {},
 		"modifications": [],
 		"broadsides": {
 			"port": {"cannons": []},
@@ -376,6 +596,7 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 	var current_side := ""
 	var in_cannons := false
 	var in_modifications := false
+	var in_cargo := false
 
 	while not file.eof_reached():
 		var raw_line := file.get_line()
@@ -388,12 +609,28 @@ static func _load_player_ship_record(path: String) -> Dictionary:
 			current_side = ""
 			in_cannons = false
 			in_modifications = false
+			in_cargo = false
 			continue
 
 		if not in_root:
 			continue
 
-		if line == "port:" or line == "starboard:":
+		# A manifest entry is any `good: units` line indented under `cargo:`.
+		# Keying off indent rather than the good's name keeps the parser from
+		# needing to know what a cargo type is called.
+		if _count_leading_spaces(raw_line) <= 2 and line != "cargo:":
+			in_cargo = false
+
+		if line == "cargo:":
+			in_cargo = true
+			in_cannons = false
+			in_modifications = false
+			current_side = ""
+		elif in_cargo:
+			var cargo_separator := line.find(":")
+			if cargo_separator > 0:
+				root.cargo[line.substr(0, cargo_separator).strip_edges()] = int(_parse_scalar(line.substr(cargo_separator + 1).strip_edges()))
+		elif line == "port:" or line == "starboard:":
 			current_side = line.trim_suffix(":")
 			in_cannons = false
 			in_modifications = false
@@ -448,6 +685,7 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 		"visual_variant": "",
 		"sail_set": "full",
 		"cargo_weight": 0.0,
+		"cargo": {},
 		"modifications": [],
 		"broadsides": {
 			"port": {"cannons": []},
@@ -458,6 +696,7 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 	var in_modifications := false
 	var current_side := ""
 	var in_cannons := false
+	var in_cargo := false
 
 	while not file.eof_reached():
 		var raw_line := file.get_line()
@@ -470,12 +709,25 @@ static func _load_ship_config_record(path: String, root_key: String) -> Dictiona
 			in_modifications = false
 			current_side = ""
 			in_cannons = false
+			in_cargo = false
 			continue
 
 		if not in_root:
 			continue
 
-		if line == "port:" or line == "starboard:":
+		if _count_leading_spaces(raw_line) <= 2 and line != "cargo:":
+			in_cargo = false
+
+		if line == "cargo:":
+			in_cargo = true
+			in_modifications = false
+			in_cannons = false
+			current_side = ""
+		elif in_cargo:
+			var cargo_separator := line.find(":")
+			if cargo_separator > 0:
+				root.cargo[line.substr(0, cargo_separator).strip_edges()] = int(_parse_scalar(line.substr(cargo_separator + 1).strip_edges()))
+		elif line == "port:" or line == "starboard:":
 			current_side = line.trim_suffix(":")
 			in_modifications = false
 			in_cannons = false
@@ -531,6 +783,7 @@ static func _load_overworld_ship_records(path: String) -> Array[Dictionary]:
 	var current_route_point: Dictionary = {}
 	var current_side := ""
 	var in_cannons := false
+	var in_cargo := false
 
 	while not file.eof_reached():
 		var raw_line := file.get_line()
@@ -556,12 +809,26 @@ static func _load_overworld_ship_records(path: String) -> Array[Dictionary]:
 			current["id"] = _parse_scalar(line.substr(line.find(":") + 1).strip_edges())
 			in_route = false
 			in_cannons = false
+			in_cargo = false
 			current_side = ""
 		elif current.is_empty():
 			continue
+		elif indent == 4 and line == "cargo:":
+			if not current_route_point.is_empty():
+				current.route.append(current_route_point)
+				current_route_point = {}
+			in_cargo = true
+			in_route = false
+			in_cannons = false
+			current_side = ""
+		elif indent == 6 and in_cargo:
+			var cargo_separator := line.find(":")
+			if cargo_separator > 0:
+				current.cargo[line.substr(0, cargo_separator).strip_edges()] = int(_parse_scalar(line.substr(cargo_separator + 1).strip_edges()))
 		elif indent == 4 and line.begins_with("route:"):
 			in_route = true
 			in_cannons = false
+			in_cargo = false
 			current_side = ""
 		elif indent == 6 and in_route and line.begins_with("- x:"):
 			if not current_route_point.is_empty():
@@ -586,6 +853,7 @@ static func _load_overworld_ship_records(path: String) -> Array[Dictionary]:
 				current_route_point = {}
 			in_route = false
 			in_cannons = false
+			in_cargo = false
 			current_side = ""
 			if line == "broadsides:":
 				continue
@@ -612,6 +880,8 @@ static func _default_overworld_ship_record() -> Dictionary:
 		"sail_set": "full",
 		"crew": 0,
 		"cargo_weight": 0.0,
+		"cargo": {},
+		"cargo_role": "",
 		"start_x": 0.0,
 		"start_z": 0.0,
 		"route": [],

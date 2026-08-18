@@ -26,7 +26,7 @@ func _process(_delta: float) -> void:
 	var nearest_text := "None"
 	if overworld and overworld.has_method("get_nearest_intercept_label"):
 		nearest_text = overworld.call("get_nearest_intercept_label")
-	label.text = "Overworld: Jamaica\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%\nNearest: %s" % [
+	label.text = "Overworld: Jamaica\nSpeed: %.2f\nHeading: %03.0f deg\nWind: %03.0f deg @ %.1f\nWind Angle: %03.0f deg\nSail Efficiency: %.2f\nSail Trim: %.0f%%\nFleet: %s\nNearest: %s" % [
 		values.speed,
 		values.heading,
 		values.wind_heading,
@@ -34,5 +34,6 @@ func _process(_delta: float) -> void:
 		values.wind_angle,
 		values.sail_efficiency,
 		values.sail_trim * 100.0,
+		values.get("fleet", "1 ship"),
 		nearest_text
 	]

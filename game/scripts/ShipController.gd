@@ -20,13 +20,16 @@ var ship_loadout: Dictionary = {}
 
 
 func _ready() -> void:
-	ship_loadout = ContentCatalog.load_player_ship_record()
-	_apply_ship_stats(ContentCatalog.load_player_ship_stats())
+	ship_loadout = _load_player_ship_record()
+	_apply_ship_stats(ContentCatalog.build_ship_stats(ship_loadout, ContentCatalog.load_ship_types(), ContentCatalog.load_ship_modifications()))
 	if ship_visuals:
 		ship_visuals.apply_visuals(ship_loadout, ship_stats)
 		ship_visuals.update_sail_trim(sail_trim)
 	if combat:
 		combat.configure(ship_stats, ship_loadout, ship_visuals, "Player ship")
+		# She sails in carrying whatever the last fight left her with. Without
+		# this the hull is fresh every battle and nothing has consequences.
+		combat.apply_condition(_load_player_ship_condition())
 	if broadside_controller:
 		broadside_controller.set("ship_config", "player")
 		broadside_controller.set("process_player_input", true)
@@ -37,7 +40,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if combat and combat.is_sunk:
+	if combat and (combat.is_sunk or combat.has_struck_colors):
 		return
 	steering_input = Input.get_axis("steer_port", "steer_starboard")
 	_update_sail_trim(delta)
@@ -139,6 +142,10 @@ func get_active_cannon_limit() -> int:
 	return combat.get_active_cannon_limit()
 
 
+func get_gunnery_multiplier() -> float:
+	return combat.get_gunnery_multiplier() if combat else 1.0
+
+
 func get_hull_fraction() -> float:
 	return combat.get_hull_fraction()
 
@@ -153,6 +160,23 @@ func get_crew_fraction() -> float:
 
 func get_morale_fraction() -> float:
 	return combat.get_morale_fraction()
+
+
+func _load_player_ship_record() -> Dictionary:
+	# A practice battle sails whatever the setup screen built; the campaign
+	# player always sails data/ships/player_ship.yaml. Same shape either way,
+	# so everything downstream is none the wiser.
+	var session := get_node_or_null("/root/GameSession")
+	if session and session.has_method("get_player_ship_record"):
+		return session.call("get_player_ship_record")
+	return ContentCatalog.load_player_ship_record()
+
+
+func _load_player_ship_condition() -> Dictionary:
+	var session := get_node_or_null("/root/GameSession")
+	if session and session.has_method("get_player_ship_condition"):
+		return session.call("get_player_ship_condition")
+	return {}
 
 
 func _apply_ship_stats(stats: Resource) -> void:
@@ -170,13 +194,13 @@ func _apply_ship_stats(stats: Resource) -> void:
 
 
 func _get(property: StringName) -> Variant:
-	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
+	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "has_struck_colors", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
 		return combat.get(property)
 	return null
 
 
 func _set(property: StringName, value: Variant) -> bool:
-	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
+	if combat and property in ["hull", "sail", "crew", "morale", "max_hull", "max_sail", "max_crew", "max_morale", "is_sunk", "has_struck_colors", "is_burning", "is_mast_broken", "burning_severity", "burning_growth_chance_per_second", "burning_magazine_explosion_chance_per_second", "burning_growth_tick", "magazine_explosion_multiplier", "disabled_cannons", "disabled_gun_ports"]:
 		combat.set(property, value)
 		return true
 	return false

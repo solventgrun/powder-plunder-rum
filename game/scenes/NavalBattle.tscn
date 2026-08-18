@@ -14,6 +14,9 @@
 [ext_resource type="Script" path="res://game/scripts/ui/CombatStatusPanel.gd" id="10_combat_status"]
 [ext_resource type="Theme" path="res://game/ui/HudTheme.tres" id="14_theme"]
 [ext_resource type="Script" path="res://game/scripts/ui/AmmoReadout.gd" id="15_ammo_readout"]
+[ext_resource type="Script" path="res://game/scripts/combat/BoardingController.gd" id="16_boarding"]
+[ext_resource type="Script" path="res://game/scripts/ui/BoardingPrompt.gd" id="17_boarding_prompt"]
+[ext_resource type="Script" path="res://game/scripts/combat/ShipCollisionSystem.gd" id="18_collisions"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
 size = Vector2(280, 280)
@@ -30,9 +33,9 @@ albedo_color = Color(0.67, 0.28, 0.12, 1)
 albedo_color = Color(0.92, 0.78, 0.46, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_debug"]
-font_size = 17
+font_size = 12
 font_color = Color(0.92, 0.98, 1, 1)
-outline_size = 4
+outline_size = 3
 outline_color = Color(0, 0, 0, 0.78)
 
 [node name="NavalBattle" type="Node3D" unique_id=485635468]
@@ -75,6 +78,17 @@ wind_system_path = NodePath("../WindSystem")
 player_ship_path = NodePath("../PlayerShip")
 initial_firing_delay = 3.0
 
+[node name="BoardingController" type="Node" parent="."]
+script = ExtResource("16_boarding")
+player_ship_path = NodePath("../PlayerShip")
+target_ship_path = NodePath("../TargetShip")
+battle_hud_path = NodePath("../Debug")
+
+[node name="ShipCollisionSystem" type="Node" parent="."]
+script = ExtResource("18_collisions")
+player_ship_path = NodePath("../PlayerShip")
+target_ship_path = NodePath("../TargetShip")
+
 [node name="Camera3D" type="Camera3D" parent="." unique_id=1234318419]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 18, 16)
 current = true
@@ -89,22 +103,23 @@ wind_system_path = NodePath("../WindSystem")
 target_ship_path = NodePath("../TargetShip")
 
 [node name="DebugLabel" type="Label" parent="Debug" unique_id=102800909]
-offset_left = 18.0
-offset_top = 16.0
-offset_right = 320.0
-offset_bottom = 170.0
-label_settings = SubResource("LabelSettings_debug")
-
-[node name="WindIndicator" type="Control" parent="Debug" unique_id=315468218]
-layout_mode = 3
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -150.0
-offset_top = 18.0
-offset_right = -22.0
-offset_bottom = 146.0
+offset_left = -360.0
+offset_top = 16.0
+offset_right = -18.0
+offset_bottom = 170.0
 grow_horizontal = 0
+label_settings = SubResource("LabelSettings_debug")
+horizontal_alignment = 2
+
+[node name="WindIndicator" type="Control" parent="Debug" unique_id=315468218]
+layout_mode = 3
+offset_left = 22.0
+offset_top = 18.0
+offset_right = 150.0
+offset_bottom = 146.0
 theme = ExtResource("14_theme")
 script = ExtResource("5_indicator")
 
@@ -144,6 +159,18 @@ mouse_filter = 2
 theme = ExtResource("14_theme")
 script = ExtResource("15_ammo_readout")
 broadside_path = NodePath("../../PlayerShip/BroadsideController")
+
+[node name="BoardingPrompt" type="Control" parent="Debug"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("14_theme")
+script = ExtResource("17_boarding_prompt")
+boarding_path = NodePath("../../BoardingController")
 
 [node name="CombatStatusPanel" type="Control" parent="Debug"]
 layout_mode = 3

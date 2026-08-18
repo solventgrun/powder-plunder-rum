@@ -31,9 +31,9 @@ size = Vector3(0.2, 2.2, 0.2)
 albedo_color = Color(0.85, 0.16, 0.12, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_debug"]
-font_size = 16
+font_size = 12
 font_color = Color(0.92, 0.98, 1, 1)
-outline_size = 4
+outline_size = 3
 outline_color = Color(0, 0, 0, 0.78)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_world_bound"]
@@ -42,6 +42,7 @@ size = Vector3(250, 2, 2)
 [node name="Overworld" type="Node3D"]
 script = ExtResource("1_overworld")
 player_path = NodePath("PlayerShip")
+port_path = NodePath("PortRoyal")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 mesh = SubResource("PlaneMesh_ocean")
@@ -119,22 +120,23 @@ wind_system_path = NodePath("../WindSystem")
 overworld_path = NodePath("..")
 
 [node name="DebugLabel" type="Label" parent="Debug"]
-offset_left = 18.0
-offset_top = 16.0
-offset_right = 330.0
-offset_bottom = 170.0
-label_settings = SubResource("LabelSettings_debug")
-
-[node name="Compass" type="Control" parent="Debug"]
-layout_mode = 3
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -180.0
-offset_top = 18.0
-offset_right = -22.0
-offset_bottom = 176.0
+offset_left = -360.0
+offset_top = 16.0
+offset_right = -18.0
+offset_bottom = 170.0
 grow_horizontal = 0
+label_settings = SubResource("LabelSettings_debug")
+horizontal_alignment = 2
+
+[node name="Compass" type="Control" parent="Debug"]
+layout_mode = 3
+offset_left = 22.0
+offset_top = 18.0
+offset_right = 180.0
+offset_bottom = 176.0
 theme = ExtResource("10_theme")
 script = ExtResource("7_compass")
 player_path = NodePath("../../PlayerShip")

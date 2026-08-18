@@ -1,0 +1,69 @@
+# Cargo roles: what a ship carries when nobody said.
+#
+# A ship's manifest can be written out by hand in her own `cargo:` block, and
+# where it matters it should be — a specific trader worth hunting, a specific
+# treasure ship for a playtest. This file is the fallback for everyone else, so
+# adding an encounter does not mean pricing her hold by hand.
+#
+# `hold_fraction` is how much of her FREE hold she fills — free meaning what is
+# left of `usable_load_capacity` once her guns are aboard. A warship crammed
+# with cannon therefore carries little whatever her role says, which is correct.
+#
+# `goods` are relative shares, not units: a share of 5 against a share of 1 means
+# roughly five tons of the first for every one of the second. The generator
+# fills to the tonnage, then converts to whole units at each good's weight, so
+# heavy goods come in fewer units and a share of a light good goes further.
+#
+# Generation is seeded from the ship's id, so a given ship always carries the
+# same hold until you take it off her. That matters now that a ship you plunder
+# stays plundered — the sea should not restock her because you sailed away.
+cargo_roles:
+  - id: trader
+    name: Merchant Trader
+    hold_fraction: 0.85
+    goods:
+      sugar: 5
+      tobacco: 3
+      cloth: 3
+      spices: 1
+      provisions: 2
+      rum: 1
+
+  - id: patrol
+    name: Naval Patrol
+    hold_fraction: 0.4
+    # A warship's hold is stores, not merchandise. Worth boarding for what keeps
+    # you fighting rather than for what sells.
+    goods:
+      naval_stores: 4
+      gunpowder: 3
+      round_shot: 3
+      small_arms: 2
+      provisions: 2
+      medicine: 1
+      rum: 2
+
+  - id: treasure
+    name: Treasure Ship
+    hold_fraction: 0.7
+    goods:
+      gold: 4
+      luxury_goods: 2
+      spices: 2
+      cloth: 1
+
+  - id: supply
+    name: Supply Vessel
+    hold_fraction: 0.9
+    goods:
+      naval_stores: 5
+      provisions: 4
+      rum: 3
+      medicine: 2
+      gunpowder: 2
+
+  # Sails empty. No `goods` block at all — the loader reads a missing one as
+  # nothing aboard, and `{}` would parse as the literal text.
+  - id: empty
+    name: In Ballast
+    hold_fraction: 0.0

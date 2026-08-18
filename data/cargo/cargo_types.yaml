@@ -1,0 +1,148 @@
+# Cargo types. What a hold can contain, what it weighs, and what it is worth.
+#
+# Cargo is measured in whole units (a crate, a barrel, a chest). `weight` is in
+# the same units as cannon weight and `usable_load_capacity` in
+# data/ships/ship_types.yaml, so a ton of sugar and a ton of gun weigh the same
+# to the hull — and both slow her down the same way.
+#
+# `value` is per unit and is dormant until ports exist to sell at (Milestone 4).
+#
+# THE FIELD THAT MATTERS IS VALUE PER TON. That ratio is the whole decision at
+# the after-action screen: a hold is small, so what you leave behind is the
+# interesting part. Luxury goods at 90 a ton and sugar at 1.5 are meant to be
+# 60x apart. Scarcity is what balances that, not the numbers here — a trader
+# carries thirty tons of sugar and a treasure ship two chests of jewels, which
+# is set in the manifests (data/cargo/cargo_roles.yaml and per-ship `cargo:`
+# blocks), not in this file.
+#
+# `role` groups goods by the question they ask you, and the three are named for
+# the game:
+#   plunder  worth money, nothing more. "Do I have room?"
+#   powder   ship's and military stores. "Do I need this to survive the next one?"
+#   rum      crew stores. Same question, about the men rather than the hull.
+#
+# `effect` is what a good DOES when used, and only some goods have one. The rest
+# are inert cargo until ports arrive. Effect kinds:
+#   repair            naval stores: jury-rig hull and sail at sea, per unit spent
+#   morale            rum: lifts morale, and makes the crew drunk doing it
+#   provisions        food: consumed over campaign time once the clock exists
+#   wounded_recovery  medicine: hands who would have been lost return to duty
+#   arms              small arms: how well your boarding party is equipped
+#
+# Adding a good is a data change: append a record here and it appears in the
+# after-action hold, the practice screen, and the validator. Nothing in code
+# knows any good by name except through `effect.kind`.
+cargo_types:
+  # --- PLUNDER: sell it later -------------------------------------------
+  - id: sugar
+    name: Sugar
+    role: plunder
+    weight: 4
+    value: 6
+    description: Hogsheads of muscovado. Heavy, cheap, and everywhere.
+
+  - id: tobacco
+    name: Tobacco
+    role: plunder
+    weight: 3
+    value: 9
+    description: Pressed leaf in bales.
+
+  - id: cloth
+    name: Cloth
+    role: plunder
+    weight: 2
+    value: 14
+    description: Bolts of woollen and linen goods out of Europe.
+
+  - id: spices
+    name: Spices
+    role: plunder
+    weight: 1
+    value: 30
+    description: Pepper, nutmeg and clove. Light, and worth the room.
+
+  - id: gold
+    name: Gold
+    role: plunder
+    weight: 2
+    value: 80
+    description: Coin, bar and plate. Dense for its bulk — a chest is a burden.
+
+  - id: luxury_goods
+    name: Luxury Goods
+    role: plunder
+    weight: 1
+    value: 90
+    description: Silks, jewellery and worked silver. The best cargo afloat.
+
+  # --- POWDER: ship's and military stores --------------------------------
+  - id: naval_stores
+    name: Naval Stores
+    role: powder
+    weight: 5
+    value: 10
+    description: Spars, canvas, cordage and tar. Cheap to sell, precious at sea.
+    effect:
+      kind: repair
+      hull_per_unit: 14
+      sail_per_unit: 10
+
+  - id: gunpowder
+    name: Gunpowder
+    role: powder
+    weight: 3
+    value: 18
+    description: Barrelled powder. Sells well; will be spent firing once ammunition is tracked.
+
+  - id: round_shot
+    name: Round Shot
+    role: powder
+    weight: 4
+    value: 8
+    description: Iron shot by the ton. Will be spent firing once ammunition is tracked.
+
+  - id: small_arms
+    name: Small Arms
+    role: powder
+    weight: 2
+    value: 16
+    description: Muskets, pistols, cutlasses and boarding axes.
+    effect:
+      kind: arms
+      # A boarding party fights better for being properly armed. The bonus
+      # scales with the share of the party you can equip, so one crate on a
+      # galleon's crew is nearly nothing and a full armoury is the cap.
+      crew_armed_per_unit: 12
+      fully_armed_strength_bonus: 0.25
+
+  # --- RUM: crew stores ---------------------------------------------------
+  - id: provisions
+    name: Provisions
+    role: rum
+    weight: 2
+    value: 8
+    description: Salt meat, biscuit, peas and casks of water. Keeps a crew at sea.
+    effect:
+      kind: provisions
+
+  - id: rum
+    name: Rum
+    role: rum
+    weight: 3
+    value: 12
+    description: The ration. Lifts the men, and costs you their judgement.
+    effect:
+      kind: morale
+      morale_per_unit: 9
+      drunkenness_per_unit: 12
+
+  - id: medicine
+    name: Medicine
+    role: rum
+    weight: 1
+    value: 25
+    description: Surgeon's stores. Wounded men who would have been lost return to duty.
+    effect:
+      kind: wounded_recovery
+      crew_per_unit: 4

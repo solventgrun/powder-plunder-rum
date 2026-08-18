@@ -1,3 +1,9 @@
+# Ships sailing the overworld, and what is in their holds.
+#
+# A ship's hold comes from her `cargo:` block if she has one, and is rolled from
+# her `cargo_role` if she does not (see data/cargo/cargo_roles.yaml). Author the
+# ones that matter; let the rest roll. Do not set both `cargo:` and the legacy
+# `cargo_weight` scalar — the manifest wins and the scalar is ignored.
 overworld_ships:
   - id: spanish_patrol_jamaica_south
     name: Spanish Patrol
@@ -6,7 +12,9 @@ overworld_ships:
     visual_variant: patrol
     sail_set: full
     crew: 95
-    cargo_weight: 8
+    # A warship carries stores, not merchandise: worth boarding for what keeps
+    # you fighting rather than for anything you could sell.
+    cargo_role: patrol
     start_x: -4
     start_z: 58
     route:
@@ -35,7 +43,13 @@ overworld_ships:
     visual_variant: trader
     sail_set: full
     crew: 45
-    cargo_weight: 12
+    # Hand-authored: she is the easy prize, and her hold should be worth the
+    # trouble of taking her. 26 of her 32 free tons, and a chest of gold in it.
+    cargo:
+      sugar: 4
+      cloth: 3
+      spices: 2
+      gold: 1
     start_x: -54
     start_z: 52
     route:
@@ -54,3 +68,55 @@ overworld_ships:
       starboard:
         cannons:
           - light_4_pounder
+
+  - id: spanish_treasure_galleon
+    name: Nuestra Senora del Oro
+    faction: spain
+    ship_type: galleon
+    visual_variant: patrol
+    sail_set: full
+    crew: 210
+    # The prize worth losing a ship over: 24 heavy guns and a hold full of
+    # plate. Her guns leave only 60 tons free, so what she carries is rich
+    # rather than bulky.
+    cargo_role: treasure
+    start_x: 46
+    start_z: -18
+    route:
+      - x: 46
+        z: -18
+      - x: 88
+        z: -6
+      - x: 96
+        z: 34
+      - x: 58
+        z: 18
+    broadsides:
+      port:
+        cannons:
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+      starboard:
+        cannons:
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
+          - long_12_pounder
